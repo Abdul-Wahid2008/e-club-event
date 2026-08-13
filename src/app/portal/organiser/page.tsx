@@ -14,6 +14,7 @@ import {
   updateTimerStateAction,
   reviewQuestionAction,
   qualifyFinalFourAction,
+  exportRegistrationsCsvAction,
 } from '@/src/app/actions/organiserActions';
 
 const MOCK_TEAMS: Team[] = [
@@ -57,12 +58,12 @@ const MOCK_PENDING_QUESTIONS: Question[] = [
 ];
 
 const MOCK_MEMBERS = [
-  { id: 'm1', team_id: 'mock-team-1', name: 'Sai Varun', email: 'saivarun@student.nitw.ac.in', is_leader: true },
-  { id: 'm2', team_id: 'mock-team-1', name: 'Rohan Sharma', email: 'rohan@student.nitw.ac.in', is_leader: false },
-  { id: 'm3', team_id: 'mock-team-2', name: 'Ananya Rao', email: 'ananya@student.nitw.ac.in', is_leader: true },
-  { id: 'm4', team_id: 'mock-team-2', name: 'Vikram Singh', email: 'vikram@student.nitw.ac.in', is_leader: false },
-  { id: 'm5', team_id: 'mock-team-3', name: 'Kavya Patel', email: 'kavya@student.nitw.ac.in', is_leader: true },
-  { id: 'm6', team_id: 'mock-team-4', name: 'Aditya Verma', email: 'aditya@student.nitw.ac.in', is_leader: true },
+  { id: 'm1', team_id: 'mock-team-1', name: 'Sai Varun', email: 'saivarun@example.com', is_leader: true },
+  { id: 'm2', team_id: 'mock-team-1', name: 'Rohan Sharma', email: 'rohan@example.com', is_leader: false },
+  { id: 'm3', team_id: 'mock-team-2', name: 'Ananya Rao', email: 'ananya@example.com', is_leader: true },
+  { id: 'm4', team_id: 'mock-team-2', name: 'Vikram Singh', email: 'vikram@example.com', is_leader: false },
+  { id: 'm5', team_id: 'mock-team-3', name: 'Kavya Patel', email: 'kavya@example.com', is_leader: true },
+  { id: 'm6', team_id: 'mock-team-4', name: 'Aditya Verma', email: 'aditya@example.com', is_leader: true },
 ];
 
 const MOCK_AUDIT_LOGS: ScoreAuditLog[] = [
@@ -183,18 +184,14 @@ export default function OrganiserPortalPage() {
     }
   };
 
-  const exportRegistrationsCSV = () => {
-    const headers = ['Team Name', 'Domain', 'Pool', 'Member Name', 'Member Email', 'Is Leader'];
-    const rows: string[] = [];
+  const exportRegistrationsCSV = async () => {
+    const res = await exportRegistrationsCsvAction();
+    if (res.error || !res.csv) {
+      alert(res.error || 'Failed to export CSV.');
+      return;
+    }
 
-    teams.forEach((t) => {
-      const members = teamMembers.filter((m) => m.team_id === t.id);
-      members.forEach((m) => {
-        rows.push([`"${t.team_name}"`, `"${t.domain}"`, `"${t.pool}"`, `"${m.name}"`, `"${m.email}"`, m.is_leader].join(','));
-      });
-    });
-
-    const csvContent = 'data:text/csv;charset=utf-8,' + [headers.join(','), ...rows].join('\n');
+    const csvContent = 'data:text/csv;charset=utf-8,' + res.csv;
     const encodedUri = encodeURI(csvContent);
     const link = document.createElement('a');
     link.setAttribute('href', encodedUri);
@@ -396,7 +393,7 @@ export default function OrganiserPortalPage() {
                     </div>
 
                     <p className="text-sm text-white font-medium bg-gray-950 p-3 rounded-lg border border-gray-800">
-                      "{q.question_text}"
+                      &ldquo;{q.question_text}&rdquo;
                     </p>
 
                     <div className="flex flex-wrap items-center justify-end gap-2 pt-1">
