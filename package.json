@@ -6,7 +6,10 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "next lint"
+    "lint": "next lint",
+    "smoke-test": "node scripts/smoke-test.js",
+    "test-double-submit": "node scripts/test-double-submit.js",
+    "test-judge-lock": "node scripts/test-judge-lock.js"
   },
   "dependencies": {
     "@supabase/ssr": "^0.5.1",
