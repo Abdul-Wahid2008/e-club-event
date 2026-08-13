@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Trophy, Award, Users, HelpCircle, ChevronDown, ChevronUp, Sparkles } from 'lucide-react';
 import { createClient } from '@/src/lib/supabase/client';
@@ -31,7 +31,7 @@ const MOCK_LEADERBOARD: PitchLeaderboardEntry[] = [
     judges_submitted_count: 5,
     total_voters: 12,
     total_qa_points: 3,
-    total_weighted_score: 87.4,
+    total_weighted_score: 86.85,
   },
   {
     team_id: 'mock-team-2',
@@ -51,7 +51,7 @@ const MOCK_LEADERBOARD: PitchLeaderboardEntry[] = [
     judges_submitted_count: 6,
     total_voters: 10,
     total_qa_points: 2,
-    total_weighted_score: 81.9,
+    total_weighted_score: 81.55,
   },
   {
     team_id: 'mock-team-3',
@@ -71,7 +71,7 @@ const MOCK_LEADERBOARD: PitchLeaderboardEntry[] = [
     judges_submitted_count: 4,
     total_voters: 8,
     total_qa_points: 1,
-    total_weighted_score: 76.5,
+    total_weighted_score: 75.85,
   },
   {
     team_id: 'mock-team-4',
@@ -91,7 +91,7 @@ const MOCK_LEADERBOARD: PitchLeaderboardEntry[] = [
     judges_submitted_count: 3,
     total_voters: 6,
     total_qa_points: 0,
-    total_weighted_score: 71.8,
+    total_weighted_score: 70.15,
   },
 ];
 
@@ -104,7 +104,7 @@ export default function LiveLeaderboard({
   const [expandedTeamId, setExpandedTeamId] = useState<string | null>('mock-team-1');
   const [loading, setLoading] = useState(false);
 
-  const fetchLeaderboard = async () => {
+  const fetchLeaderboard = useCallback(async () => {
     try {
       const supabase = createClient();
       const { data, error } = await supabase
@@ -118,7 +118,7 @@ export default function LiveLeaderboard({
     } catch (e) {
       // Keep mock fallback on error
     }
-  };
+  }, [roundName]);
 
   useEffect(() => {
     fetchLeaderboard();
@@ -136,7 +136,7 @@ export default function LiveLeaderboard({
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [roundName]);
+  }, [fetchLeaderboard]);
 
   const toggleExpand = (teamId: string) => {
     setExpandedTeamId(expandedTeamId === teamId ? null : teamId);
