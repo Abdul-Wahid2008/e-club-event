@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import Navbar from '@/src/components/Navbar';
 import { Users, Plus, Trash2, ShieldAlert, Sparkles, CheckCircle2, ArrowRight } from 'lucide-react';
 import { registerTeamAction } from '@/src/app/actions/authActions';
-import { isValidNitwEmail } from '@/src/lib/validation';
+import { isValidEmailFormat } from '@/src/lib/validation';
 import { useRouter } from 'next/navigation';
 import { createClient } from '@/src/lib/supabase/client';
 
@@ -63,13 +63,13 @@ export default function RegisterTeamPage() {
     e.preventDefault();
     setError(null);
 
-    // CLIENT-SIDE VALIDATION FOR ALL TEAM MEMBERS (REQUIREMENT 1)
+    // CLIENT-SIDE VALIDATION FOR ALL TEAM MEMBERS: format only, any domain allowed
     const allEmails = [leaderEmail, ...members.map((m) => m.email)];
-    const invalidList = allEmails.filter((em) => !isValidNitwEmail(em));
+    const invalidList = allEmails.filter((em) => !isValidEmailFormat(em));
 
     if (invalidList.length > 0) {
       setError(
-        `All team members must use official @nitw.ac.in emails. Invalid email(s): ${invalidList.join(', ')}`
+        `All team member emails must be valid. Invalid email(s): ${invalidList.join(', ')}`
       );
       return;
     }
@@ -145,7 +145,7 @@ export default function RegisterTeamPage() {
               <div>
                 <h1 className="text-2xl font-extrabold text-white tracking-tight">Register Team</h1>
                 <p className="text-xs text-gray-400">
-                  Add 2 to 4 total members. All emails MUST end with <span className="text-brand-cyan font-bold font-mono">@student.nitw.ac.in</span>.
+                  Add 2 to 4 total members. Any valid email address is accepted.
                 </p>
               </div>
             </div>
@@ -191,7 +191,7 @@ export default function RegisterTeamPage() {
                     />
                   </div>
                   <div>
-                    <label className="block text-[11px] text-gray-400 mb-1">Leader @student.nitw.ac.in Email</label>
+                    <label className="block text-[11px] text-gray-400 mb-1">Leader Email</label>
                     <input
                       type="email"
                       required
@@ -248,7 +248,7 @@ export default function RegisterTeamPage() {
                       <input
                         type="email"
                         required
-                        placeholder="ab25chb0b26@student.nitw.ac.in"
+                        placeholder="member@example.com"
                         value={member.email}
                         onChange={(e) => handleMemberChange(idx, 'email', e.target.value)}
                         className="w-full bg-gray-950 border border-gray-700 rounded-lg px-3 py-2 text-xs text-white focus:outline-none focus:border-brand-cyan font-mono"

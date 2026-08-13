@@ -66,7 +66,7 @@ export default function JudgePortalPage() {
     id: 'mock-judge-1',
     auth_user_id: 'mock-user-j1',
     name: 'Judge Dr. Sharma',
-    email: 'judge1@nitw.ac.in',
+    email: 'judge1@student.nitw.ac.in',
   });
   const [eventState, setEventState] = useState<EventState | null>(MOCK_EVENT_STATE);
   const [currentPitch, setCurrentPitch] = useState<(Pitch & { teams?: Team }) | null>(MOCK_CURRENT_PITCH);

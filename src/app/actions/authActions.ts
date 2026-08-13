@@ -2,14 +2,14 @@
 
 import { createClient } from '@/src/lib/supabase/server';
 import { createAdminClient } from '@/src/lib/supabase/admin';
-import { isValidNitwEmail, validateTeamMemberEmails } from '@/src/lib/validation';
+import { isValidStaffEmail, isValidEmailFormat, validateTeamMemberEmails } from '@/src/lib/validation';
 import { redirect } from 'next/navigation';
 
 export async function requestTeamOtpAction(formData: FormData) {
   const email = formData.get('email') as string;
 
-  if (!email || !isValidNitwEmail(email)) {
-    return { error: 'Invalid email domain. Only official NIT Warangal emails ending with @student.nitw.ac.in (or @nitw.ac.in) are allowed.' };
+  if (!email || !isValidEmailFormat(email)) {
+    return { error: 'Please provide a valid email address.' };
   }
 
   const supabase = createClient();
@@ -28,8 +28,8 @@ export async function requestTeamOtpAction(formData: FormData) {
 }
 
 export async function verifyTeamOtpAction(email: string, token: string) {
-  if (!email || !isValidNitwEmail(email)) {
-    return { error: 'Invalid @student.nitw.ac.in email address.' };
+  if (!email || !isValidEmailFormat(email)) {
+    return { error: 'Invalid email address.' };
   }
 
   const supabase = createClient();
@@ -73,11 +73,11 @@ export async function registerTeamAction(payload: {
     return { error: 'A team must have between 2 and 4 total members.' };
   }
 
-  // 3. SERVER-SIDE STRICT VALIDATION: Check EVERY member email ends with @student.nitw.ac.in (or @nitw.ac.in)
+  // 3. SERVER-SIDE VALIDATION: Check EVERY member email is a syntactically valid address (any domain allowed)
   const validation = validateTeamMemberEmails(allEmails);
   if (!validation.valid) {
     return {
-      error: `All team members must use official student emails ending with @student.nitw.ac.in. Invalid emails found: ${validation.invalidEmails.join(', ')}`,
+      error: `All team member emails must be valid. Invalid emails found: ${validation.invalidEmails.join(', ')}`,
     };
   }
 
@@ -184,6 +184,20 @@ export async function staffLoginAction(formData: FormData) {
 
   if (!email || !password) {
     return { error: 'Please provide both email and password.' };
+  }
+
+  // SERVER-SIDE STRICT DOMAIN ENFORCEMENT for staff (judge/organiser) accounts.
+  // Temporary exception: STAFF_TEST_EMAIL_ALLOWLIST (comma-separated) lets pre-seeded
+  // non-institute test accounts keep working until they're migrated to real
+  // @student.nitw.ac.in addresses. Remove this allowlist once testing is done.
+  const testAllowlist = (process.env.STAFF_TEST_EMAIL_ALLOWLIST || '')
+    .split(',')
+    .map((e) => e.trim().toLowerCase())
+    .filter(Boolean);
+  const normalizedEmail = email.trim().toLowerCase();
+
+  if (!isValidStaffEmail(email) && !testAllowlist.includes(normalizedEmail)) {
+    return { error: 'Staff login is restricted to official @student.nitw.ac.in email addresses.' };
   }
 
   const supabase = createClient();

@@ -14,6 +14,9 @@ export default function StaffAuthPage() {
     setError(null);
     setLoading(true);
 
+    // NOTE: server is authoritative on the domain check (staffLoginAction),
+    // including the temporary test-account allowlist, so we don't hard-block
+    // here — only the server response below drives the error message.
     const formData = new FormData(e.currentTarget);
     const res = await staffLoginAction(formData);
 
@@ -57,7 +60,7 @@ export default function StaffAuthPage() {
                   name="email"
                   type="email"
                   required
-                  placeholder="judge@nitw.ac.in or organiser@nitw.ac.in"
+                  placeholder="judge@student.nitw.ac.in or organiser@student.nitw.ac.in"
                   className="w-full bg-gray-900 border border-gray-700 rounded-xl pl-10 pr-4 py-3 text-sm text-white focus:outline-none focus:border-brand-purple transition-colors"
                 />
               </div>
