@@ -36,35 +36,35 @@ ON CONFLICT (id) DO NOTHING;
   Execute the following SQL snippets to register organiser and judge auth accounts.
 
   -- 1. Create Organiser Account:
-  -- Email: organiser@nitw.ac.in
+  -- Email: organiser@student.nitw.ac.in
   -- Password: OrganiserPassword123!
   
   -- 2. Create 6 Judge Accounts:
-  -- judge1@nitw.ac.in (Password: JudgePassword123!)
-  -- judge2@nitw.ac.in (Password: JudgePassword123!)
-  -- judge3@nitw.ac.in (Password: JudgePassword123!)
-  -- judge4@nitw.ac.in (Password: JudgePassword123!)
-  -- judge5@nitw.ac.in (Password: JudgePassword123!)
-  -- judge6@nitw.ac.in (Password: JudgePassword123!)
+  -- judge1@student.nitw.ac.in (Password: JudgePassword123!)
+  -- judge2@student.nitw.ac.in (Password: JudgePassword123!)
+  -- judge3@student.nitw.ac.in (Password: JudgePassword123!)
+  -- judge4@student.nitw.ac.in (Password: JudgePassword123!)
+  -- judge5@student.nitw.ac.in (Password: JudgePassword123!)
+  -- judge6@student.nitw.ac.in (Password: JudgePassword123!)
 
   After creating Auth users in Supabase Dashboard Auth, insert profiles & judge records:
   
   INSERT INTO public.profiles (id, email, role, full_name) VALUES
-    ('ORGANISER_USER_UUID', 'organiser@nitw.ac.in', 'organiser', 'Event Organiser');
+    ('ORGANISER_USER_UUID', 'organiser@student.nitw.ac.in', 'organiser', 'Event Organiser');
 
   INSERT INTO public.profiles (id, email, role, full_name) VALUES
-    ('JUDGE1_USER_UUID', 'judge1@nitw.ac.in', 'judge', 'Judge Dr. Sharma'),
-    ('JUDGE2_USER_UUID', 'judge2@nitw.ac.in', 'judge', 'Judge Prof. Rao'),
-    ('JUDGE3_USER_UUID', 'judge3@nitw.ac.in', 'judge', 'Judge Ms. Patel'),
-    ('JUDGE4_USER_UUID', 'judge4@nitw.ac.in', 'judge', 'Judge Mr. Verma'),
-    ('JUDGE5_USER_UUID', 'judge5@nitw.ac.in', 'judge', 'Judge Dr. Iyer'),
-    ('JUDGE6_USER_UUID', 'judge6@nitw.ac.in', 'judge', 'Judge Mr. Reddy');
+    ('JUDGE1_USER_UUID', 'judge1@student.nitw.ac.in', 'judge', 'Judge Dr. Sharma'),
+    ('JUDGE2_USER_UUID', 'judge2@student.nitw.ac.in', 'judge', 'Judge Prof. Rao'),
+    ('JUDGE3_USER_UUID', 'judge3@student.nitw.ac.in', 'judge', 'Judge Ms. Patel'),
+    ('JUDGE4_USER_UUID', 'judge4@student.nitw.ac.in', 'judge', 'Judge Mr. Verma'),
+    ('JUDGE5_USER_UUID', 'judge5@student.nitw.ac.in', 'judge', 'Judge Dr. Iyer'),
+    ('JUDGE6_USER_UUID', 'judge6@student.nitw.ac.in', 'judge', 'Judge Mr. Reddy');
 
   INSERT INTO public.judges (auth_user_id, name, email) VALUES
-    ('JUDGE1_USER_UUID', 'Judge Dr. Sharma', 'judge1@nitw.ac.in'),
-    ('JUDGE2_USER_UUID', 'Judge Prof. Rao', 'judge2@nitw.ac.in'),
-    ('JUDGE3_USER_UUID', 'Judge Ms. Patel', 'judge3@nitw.ac.in'),
-    ('JUDGE4_USER_UUID', 'Judge Mr. Verma', 'judge4@nitw.ac.in'),
-    ('JUDGE5_USER_UUID', 'Judge Dr. Iyer', 'judge5@nitw.ac.in'),
-    ('JUDGE6_USER_UUID', 'Judge Mr. Reddy', 'judge6@nitw.ac.in');
+    ('JUDGE1_USER_UUID', 'Judge Dr. Sharma', 'judge1@student.nitw.ac.in'),
+    ('JUDGE2_USER_UUID', 'Judge Prof. Rao', 'judge2@student.nitw.ac.in'),
+    ('JUDGE3_USER_UUID', 'Judge Ms. Patel', 'judge3@student.nitw.ac.in'),
+    ('JUDGE4_USER_UUID', 'Judge Mr. Verma', 'judge4@student.nitw.ac.in'),
+    ('JUDGE5_USER_UUID', 'Judge Dr. Iyer', 'judge5@student.nitw.ac.in'),
+    ('JUDGE6_USER_UUID', 'Judge Mr. Reddy', 'judge6@student.nitw.ac.in');
 */
