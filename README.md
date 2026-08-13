@@ -10,7 +10,7 @@ Featuring three real-time synchronized portals (Team, Judge, Organiser) powered 
 
 - **Frontend**: Next.js 14 (App Router), React 18, Tailwind CSS, Framer Motion, Canvas Confetti.
 - **Backend & Database**: Supabase Postgres + Supabase Realtime + Supabase Auth.
-- **Strict Email Domain Enforcement**: Validates that **EVERY team member's email (all 2–4 members)** ends with `@nitw.ac.in` both client-side and server-side.
+- **Domain-Gated Auth**: Staff (judge/organiser) accounts are restricted to official `@student.nitw.ac.in` addresses, enforced client- and server-side. Team (fresher) registration accepts any syntactically valid email address, since incoming freshers may not yet have an institute email — enforced by format validation only, client- and server-side.
 - **Three Portals**:
   1. **Team Portal**: Registration with random domain & auto-balanced pool (A/B), live event rival voting (1–5 sliders) and question submission, question status tracker, and team journey analytics.
   2. **Judge Portal**: Pitch evaluation rubric (1–10 sliders), locked scores, judge progress indicator (e.g. `4/6 judges submitted`), and context view of approved Q&A.
@@ -71,35 +71,35 @@ SUPABASE_SERVICE_ROLE_KEY=your-supabase-service-role-key-here
 ### 4. Create Organiser & Judge Accounts
 1. Go to Supabase Dashboard -> **Authentication** -> **Users** -> **Add User**.
 2. Create the Organiser account:
-   - Email: `organiser@nitw.ac.in`
+   - Email: `organiser@student.nitw.ac.in`
    - Password: Choose a secure password (e.g. `OrganiserPassword123!`)
 3. Create 5–6 Judge accounts:
-   - `judge1@nitw.ac.in` (Password: `JudgePassword123!`)
-   - `judge2@nitw.ac.in` (Password: `JudgePassword123!`)
-   - `judge3@nitw.ac.in` (Password: `JudgePassword123!`)
-   - `judge4@nitw.ac.in` (Password: `JudgePassword123!`)
-   - `judge5@nitw.ac.in` (Password: `JudgePassword123!`)
-   - `judge6@nitw.ac.in` (Password: `JudgePassword123!`)
+   - `judge1@student.nitw.ac.in` (Password: `JudgePassword123!`)
+   - `judge2@student.nitw.ac.in` (Password: `JudgePassword123!`)
+   - `judge3@student.nitw.ac.in` (Password: `JudgePassword123!`)
+   - `judge4@student.nitw.ac.in` (Password: `JudgePassword123!`)
+   - `judge5@student.nitw.ac.in` (Password: `JudgePassword123!`)
+   - `judge6@student.nitw.ac.in` (Password: `JudgePassword123!`)
 4. In the **SQL Editor**, link these Auth UUIDs to the `profiles` and `judges` tables:
 
 ```sql
 -- Replace 'UUID_HERE' with the generated Auth User UUIDs from the Auth table
 INSERT INTO public.profiles (id, email, role, full_name) VALUES
-  ('ORGANISER_UUID', 'organiser@nitw.ac.in', 'organiser', 'Event Organiser'),
-  ('JUDGE1_UUID', 'judge1@nitw.ac.in', 'judge', 'Judge 1'),
-  ('JUDGE2_UUID', 'judge2@nitw.ac.in', 'judge', 'Judge 2'),
-  ('JUDGE3_UUID', 'judge3@nitw.ac.in', 'judge', 'Judge 3'),
-  ('JUDGE4_UUID', 'judge4@nitw.ac.in', 'judge', 'Judge 4'),
-  ('JUDGE5_UUID', 'judge5@nitw.ac.in', 'judge', 'Judge 5'),
-  ('JUDGE6_UUID', 'judge6@nitw.ac.in', 'judge', 'Judge 6');
+  ('ORGANISER_UUID', 'organiser@student.nitw.ac.in', 'organiser', 'Event Organiser'),
+  ('JUDGE1_UUID', 'judge1@student.nitw.ac.in', 'judge', 'Judge 1'),
+  ('JUDGE2_UUID', 'judge2@student.nitw.ac.in', 'judge', 'Judge 2'),
+  ('JUDGE3_UUID', 'judge3@student.nitw.ac.in', 'judge', 'Judge 3'),
+  ('JUDGE4_UUID', 'judge4@student.nitw.ac.in', 'judge', 'Judge 4'),
+  ('JUDGE5_UUID', 'judge5@student.nitw.ac.in', 'judge', 'Judge 5'),
+  ('JUDGE6_UUID', 'judge6@student.nitw.ac.in', 'judge', 'Judge 6');
 
 INSERT INTO public.judges (auth_user_id, name, email) VALUES
-  ('JUDGE1_UUID', 'Judge 1', 'judge1@nitw.ac.in'),
-  ('JUDGE2_UUID', 'Judge 2', 'judge2@nitw.ac.in'),
-  ('JUDGE3_UUID', 'Judge 3', 'judge3@nitw.ac.in'),
-  ('JUDGE4_UUID', 'Judge 4', 'judge4@nitw.ac.in'),
-  ('JUDGE5_UUID', 'Judge 5', 'judge5@nitw.ac.in'),
-  ('JUDGE6_UUID', 'Judge 6', 'judge6@nitw.ac.in');
+  ('JUDGE1_UUID', 'Judge 1', 'judge1@student.nitw.ac.in'),
+  ('JUDGE2_UUID', 'Judge 2', 'judge2@student.nitw.ac.in'),
+  ('JUDGE3_UUID', 'Judge 3', 'judge3@student.nitw.ac.in'),
+  ('JUDGE4_UUID', 'Judge 4', 'judge4@student.nitw.ac.in'),
+  ('JUDGE5_UUID', 'Judge 5', 'judge5@student.nitw.ac.in'),
+  ('JUDGE6_UUID', 'Judge 6', 'judge6@student.nitw.ac.in');
 ```
 
 ---
@@ -119,8 +119,8 @@ INSERT INTO public.judges (auth_user_id, name, email) VALUES
 ## 🏆 User Flows & Verification
 
 1. **Team Portal (`/auth/team` & `/register-team`)**:
-   - Enter leader `@nitw.ac.in` email -> Magic OTP.
-   - Enter team name & add 1–3 members (`member1@nitw.ac.in`, etc.).
+   - Enter leader's email (any valid address, e.g. `leader@gmail.com`) -> Magic OTP.
+   - Enter team name & add 1–3 members (any valid email address per member).
    - Registration assigns a random domain (e.g. FinTech) and balances Pool A or B.
 2. **Live Event Sync**:
    - Organiser selects a live pitch from `/portal/organiser`.

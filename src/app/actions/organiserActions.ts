@@ -6,6 +6,48 @@ import { sanitizeInput } from '@/src/lib/validation';
 import { revalidatePath } from 'next/cache';
 import { PitchLeaderboardEntry } from '@/src/lib/types';
 
+export async function exportRegistrationsCsvAction() {
+  try {
+    await requireRole('organiser');
+  } catch (err: any) {
+    return { error: err.message || 'Unauthorized action.' };
+  }
+
+  const adminSupabase = createAdminClient();
+
+  const { data: teams, error: teamsErr } = await adminSupabase
+    .from('teams')
+    .select('id, team_name, domain, pool')
+    .order('created_at', { ascending: false });
+
+  if (teamsErr || !teams) {
+    return { error: teamsErr?.message || 'Failed to fetch teams.' };
+  }
+
+  const { data: members, error: membersErr } = await adminSupabase
+    .from('team_members')
+    .select('team_id, name, email, is_leader');
+
+  if (membersErr || !members) {
+    return { error: membersErr?.message || 'Failed to fetch team members.' };
+  }
+
+  const headers = ['Team Name', 'Domain', 'Pool', 'Member Name', 'Member Email', 'Is Leader'];
+  const rows: string[] = [];
+
+  teams.forEach((t) => {
+    const teamMembers = members.filter((m) => m.team_id === t.id);
+    teamMembers.forEach((m) => {
+      rows.push(
+        [`"${t.team_name}"`, `"${t.domain}"`, `"${t.pool}"`, `"${m.name}"`, `"${m.email}"`, m.is_leader].join(',')
+      );
+    });
+  });
+
+  const csv = [headers.join(','), ...rows].join('\n');
+  return { success: true, csv };
+}
+
 export async function setLivePitchAction(pitchId: string | null) {
   try {
     await requireRole('organiser');

@@ -66,7 +66,7 @@ export default function JudgePortalPage() {
     id: 'mock-judge-1',
     auth_user_id: 'mock-user-j1',
     name: 'Judge Dr. Sharma',
-    email: 'judge1@nitw.ac.in',
+    email: 'judge1@student.nitw.ac.in',
   });
   const [eventState, setEventState] = useState<EventState | null>(MOCK_EVENT_STATE);
   const [currentPitch, setCurrentPitch] = useState<(Pitch & { teams?: Team }) | null>(MOCK_CURRENT_PITCH);
@@ -144,15 +144,18 @@ export default function JudgePortalPage() {
               }
             }
 
-            // Count how many unique judges submitted for current pitch
-            const { data: subJudges } = await supabase
-              .from('judge_scores')
-              .select('judge_id')
-              .eq('pitch_id', es.current_pitch_id);
+            // Count how many unique judges submitted for current pitch.
+            // Uses the public pitch_leaderboard view (aggregated count only,
+            // no raw scores) since judge_scores itself is now restricted to
+            // the organiser and each judge's own rows.
+            const { data: leaderboardRow } = await supabase
+              .from('pitch_leaderboard')
+              .select('judges_submitted_count')
+              .eq('pitch_id', es.current_pitch_id)
+              .single();
 
-            if (subJudges) {
-              const unique = new Set(subJudges.map((s: any) => s.judge_id));
-              setJudgesSubmittedCount(unique.size);
+            if (leaderboardRow) {
+              setJudgesSubmittedCount((leaderboardRow as any).judges_submitted_count || 0);
             }
           }
         } else {

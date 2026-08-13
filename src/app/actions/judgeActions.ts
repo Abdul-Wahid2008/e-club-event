@@ -36,6 +36,20 @@ export async function submitJudgeScoresAction(payload: {
     return { error: 'Judge profile not found for this account.' };
   }
 
+  // Explicit lock check: submitJudgeScoresAction uses the admin client, which
+  // bypasses RLS entirely, so the DB-level "no update when locked" policy
+  // does not protect against this server action being called again after
+  // submission. Enforce it here instead.
+  const { data: existingScores } = await adminSupabase
+    .from('judge_scores')
+    .select('locked')
+    .eq('judge_id', judge.id)
+    .eq('pitch_id', sanitizedPitchId);
+
+  if (existingScores && existingScores.some((s) => s.locked)) {
+    return { error: 'Scores for this pitch are already submitted and locked. Ask the organiser to unlock if a correction is needed.' };
+  }
+
   const scoreEntries = [
     { criterion: 'problem_market', score: Math.max(1, Math.min(Number(scores.problem_market) || 1, 10)) },
     { criterion: 'solution_innovation', score: Math.max(1, Math.min(Number(scores.solution_innovation) || 1, 10)) },

@@ -4,7 +4,7 @@ import { useState } from 'react';
 import Navbar from '@/src/components/Navbar';
 import { Mail, KeyRound, ShieldAlert, ArrowRight, CheckCircle2 } from 'lucide-react';
 import { requestTeamOtpAction, verifyTeamOtpAction } from '@/src/app/actions/authActions';
-import { isValidNitwEmail } from '@/src/lib/validation';
+import { isValidEmailFormat } from '@/src/lib/validation';
 import { useRouter } from 'next/navigation';
 
 export default function TeamAuthPage() {
@@ -21,9 +21,9 @@ export default function TeamAuthPage() {
     setError(null);
     setSuccessMsg(null);
 
-    // Client-side domain check
-    if (!isValidNitwEmail(email)) {
-      setError('Only official NIT Warangal emails ending with @nitw.ac.in are allowed.');
+    // Client-side format check (any email domain allowed for teams)
+    if (!isValidEmailFormat(email)) {
+      setError('Please enter a valid email address.');
       return;
     }
 
@@ -37,7 +37,7 @@ export default function TeamAuthPage() {
     if (res.error) {
       setError(res.error);
     } else {
-      setSuccessMsg('Magic code sent to your @nitw.ac.in inbox! Enter the OTP below.');
+      setSuccessMsg('Magic code sent to your inbox! Enter the OTP below.');
       setStep('verify');
     }
   };
@@ -75,7 +75,7 @@ export default function TeamAuthPage() {
             </div>
             <h1 className="text-2xl font-extrabold text-white tracking-tight">Team Authentication</h1>
             <p className="text-xs text-gray-400">
-              Only official NIT Warangal student emails (<span className="text-brand-cyan font-mono font-bold">@student.nitw.ac.in</span>) are permitted.
+              Enter any valid email address to receive your OTP code.
             </p>
           </div>
 
@@ -97,14 +97,14 @@ export default function TeamAuthPage() {
             <form onSubmit={handleRequestOtp} className="space-y-4">
               <div>
                 <label className="block text-xs font-semibold text-gray-300 mb-1.5 uppercase tracking-wider">
-                  Leader @student.nitw.ac.in Email
+                  Leader Email
                 </label>
                 <div className="relative">
                   <Mail className="w-4 h-4 text-gray-500 absolute left-3.5 top-3.5" />
                   <input
                     type="email"
                     required
-                    placeholder="ab25chb0b26@student.nitw.ac.in"
+                    placeholder="you@example.com"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
                     className="w-full bg-gray-900 border border-gray-700 rounded-xl pl-10 pr-4 py-3 text-sm text-white focus:outline-none focus:border-brand-cyan transition-colors font-mono"

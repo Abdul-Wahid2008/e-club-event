@@ -61,7 +61,7 @@ export default function LandingPage() {
             </div>
             <h3 className="text-xl font-bold text-white">1. Team Portal</h3>
             <p className="text-xs text-gray-400 leading-relaxed">
-              Fresher teams register with @nitw.ac.in emails. Get assigned a random domain & pool (A or B). Vote on rival pitches and submit pressure Q&A questions.
+              Fresher teams register with any valid email address. Get assigned a random domain & pool (A or B). Vote on rival pitches and submit pressure Q&A questions.
             </p>
           </div>
 

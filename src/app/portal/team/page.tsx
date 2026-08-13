@@ -244,7 +244,7 @@ export default function TeamPortalPage() {
                   <div className="flex items-center space-x-3">
                     <Trophy className="w-5 h-5 text-brand-gold" />
                     <div>
-                      <h3 className="text-lg font-bold text-white">Rate Rivals' Pitch</h3>
+                      <h3 className="text-lg font-bold text-white">Rate Rivals&apos; Pitch</h3>
                       <p className="text-xs text-gray-400">Evaluate {pitchingTeam.team_name} (Pool {pitchingTeam.pool}) on 1–5 scale</p>
                     </div>
                   </div>
@@ -416,7 +416,7 @@ export default function TeamPortalPage() {
         <div className="glass-card rounded-2xl p-6 border border-surface-border space-y-4">
           <h3 className="text-lg font-bold text-white flex items-center space-x-2">
             <Users className="w-5 h-5 text-brand-cyan" />
-            <span>Your Team's Event Journey</span>
+            <span>Your Team&apos;s Event Journey</span>
           </h3>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">

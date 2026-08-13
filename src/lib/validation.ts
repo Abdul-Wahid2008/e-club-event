@@ -1,22 +1,34 @@
 /**
- * Validates if an email address belongs to NIT Warangal student/official domain (@student.nitw.ac.in or @nitw.ac.in)
+ * Validates if an email address belongs to the NIT Warangal STUDENT staff domain
+ * (@student.nitw.ac.in only). Used to gate STAFF (judge/organiser) accounts.
  */
-export function isValidNitwEmail(email: string): boolean {
+export function isValidStaffEmail(email: string): boolean {
   if (!email || typeof email !== 'string') return false;
   const trimmed = email.trim().toLowerCase();
-  // Accepts student emails like ab25chb0b26@student.nitw.ac.in as well as @nitw.ac.in
-  const nitwRegex = /^[a-zA-Z0-9._%+-]+@(student\.)?nitw\.ac\.in$/;
-  return nitwRegex.test(trimmed);
+  const staffRegex = /^[a-zA-Z0-9._%+-]+@student\.nitw\.ac\.in$/;
+  return staffRegex.test(trimmed);
 }
 
 /**
- * Validates an array of team member emails
+ * Validates general email FORMAT only (no domain restriction). Used for TEAM
+ * (fresher) registration/login, since incoming freshers may not yet have an
+ * institute email address.
+ */
+export function isValidEmailFormat(email: string): boolean {
+  if (!email || typeof email !== 'string') return false;
+  const trimmed = email.trim().toLowerCase();
+  const emailRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
+  return emailRegex.test(trimmed);
+}
+
+/**
+ * Validates an array of team member emails (format only, any domain allowed).
  */
 export function validateTeamMemberEmails(emails: string[]): { valid: boolean; invalidEmails: string[] } {
   const invalidEmails: string[] = [];
 
   for (const email of emails) {
-    if (!isValidNitwEmail(email)) {
+    if (!isValidEmailFormat(email)) {
       invalidEmails.push(email);
     }
   }
