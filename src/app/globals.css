@@ -3,54 +3,134 @@
 @tailwind utilities;
 
 :root {
-  --font-sans: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --font-sans: var(--font-inter), 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --font-display: var(--font-space-grotesk), 'Space Grotesk', system-ui, sans-serif;
 }
 
 body {
-  background-color: #090d16;
-  color: #f3f4f6;
+  background-color: #0A0E17;
+  color: #F7F8FC;
   font-family: var(--font-sans);
   overflow-x: hidden;
+  position: relative;
 }
 
-/* Glassmorphism utility */
-.glass-panel {
-  background: rgba(17, 24, 39, 0.75);
+/* Any element displaying real information (team names, scores, timers,
+   table rows, form labels) must render on this near-opaque panel token —
+   never directly on raw backdrop-blur with a transparent background. */
+.panel {
+  background: rgba(13, 17, 28, 0.92);
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
   border: 1px solid rgba(255, 255, 255, 0.08);
 }
 
-.glass-card {
-  background: rgba(31, 41, 61, 0.65);
+.card {
+  background: rgba(13, 17, 28, 0.92);
   backdrop-filter: blur(8px);
-  border: 1px solid rgba(255, 255, 255, 0.07);
+  -webkit-backdrop-filter: blur(8px);
+  border: 1px solid rgba(255, 255, 255, 0.08);
 }
 
-/* Neon text & glow effects */
-.text-glow-cyan {
-  text-shadow: 0 0 12px rgba(0, 240, 255, 0.6);
+.text-glow-brand {
+  text-shadow: 0 0 12px rgba(91, 124, 250, 0.6);
 }
 
-.text-glow-gold {
-  text-shadow: 0 0 12px rgba(255, 183, 3, 0.6);
+.text-glow-live {
+  text-shadow: 0 0 12px rgba(255, 75, 62, 0.6);
 }
 
-.pulse-border-cyan {
-  box-shadow: 0 0 0 0 rgba(0, 240, 255, 0.5);
-  animation: pulse-border 2s infinite;
+/* Live/data numbers must not jitter width as digits change */
+.tabular-nums {
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: 'tnum' 1;
 }
 
-@keyframes pulse-border {
-  0% {
-    box-shadow: 0 0 0 0 rgba(0, 240, 255, 0.5);
-  }
-  70% {
-    box-shadow: 0 0 0 10px rgba(0, 240, 255, 0);
-  }
-  100% {
-    box-shadow: 0 0 0 0 rgba(0, 240, 255, 0);
-  }
+/* Atmosphere: 2-3 large, heavily blurred, slowly drifting gradient orbs
+   living BEHIND panel content. Fixed + z-index -1 so it never intercepts
+   pointer events or scrolls with content. */
+.atmosphere {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.orb {
+  position: absolute;
+  border-radius: 9999px;
+  filter: blur(90px);
+  will-change: transform;
+}
+
+.orb-1 {
+  width: 46vw;
+  height: 46vw;
+  top: -12%;
+  left: -10%;
+  background: #3355FF;
+  opacity: 0.35;
+  animation: drift-1 34s ease-in-out infinite;
+}
+
+.orb-2 {
+  width: 40vw;
+  height: 40vw;
+  bottom: -14%;
+  right: -8%;
+  background: #7C3AED;
+  opacity: 0.3;
+  animation: drift-2 40s ease-in-out infinite;
+}
+
+.orb-3 {
+  width: 26vw;
+  height: 26vw;
+  top: 40%;
+  left: 55%;
+  background: #FF4B3E;
+  opacity: 0.2;
+  animation: drift-3 46s ease-in-out infinite;
+}
+
+/* Dense functional screens (Organiser console, score-entry forms) dial the
+   atmosphere down: fewer/smaller/more static, so it doesn't distract during
+   active work. */
+[data-density='dense'] .orb-1 {
+  width: 30vw;
+  height: 30vw;
+  opacity: 0.16;
+  animation-duration: 60s;
+}
+[data-density='dense'] .orb-2 {
+  width: 26vw;
+  height: 26vw;
+  opacity: 0.14;
+  animation-duration: 70s;
+}
+[data-density='dense'] .orb-3 {
+  display: none;
+}
+
+@keyframes drift-1 {
+  0%, 100% { transform: translate(0, 0) scale(1); }
+  50% { transform: translate(6vw, 8vh) scale(1.08); }
+}
+@keyframes drift-2 {
+  0%, 100% { transform: translate(0, 0) scale(1); }
+  50% { transform: translate(-5vw, -6vh) scale(1.05); }
+}
+@keyframes drift-3 {
+  0%, 100% { transform: translate(0, 0) scale(1); }
+  50% { transform: translate(-4vw, 5vh) scale(1.1); }
+}
+
+/* Magnetic hover-tilt for cards: cursor-following 3D tilt driven by
+   --tilt-x/--tilt-y custom properties set from pointermove in JS. */
+.tilt-card {
+  transform: perspective(800px) rotateX(var(--tilt-y, 0deg)) rotateY(var(--tilt-x, 0deg));
+  transition: transform 0.15s ease-out;
 }
 
 /* Custom scrollbars */
@@ -60,7 +140,7 @@ body {
 }
 
 ::-webkit-scrollbar-track {
-  background: #090d16;
+  background: #0A0E17;
 }
 
 ::-webkit-scrollbar-thumb {
@@ -69,5 +149,34 @@ body {
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #00f0ff;
+  background: #5B7CFA;
+}
+
+/* Lightweight CSS marquee for leaderboard ticker, paused under reduced-motion */
+.marquee-track {
+  display: flex;
+  width: max-content;
+  animation: marquee 30s linear infinite;
+}
+
+@keyframes marquee {
+  0% { transform: translateX(0); }
+  100% { transform: translateX(-50%); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .marquee-track {
+    animation: none !important;
+  }
+  .orb {
+    animation: none !important;
+  }
+  .tilt-card {
+    transform: none !important;
+  }
+  * {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+  }
 }
