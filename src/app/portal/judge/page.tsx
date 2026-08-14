@@ -3,7 +3,8 @@
 import { useState, useEffect } from 'react';
 import Navbar from '@/src/components/Navbar';
 import CountdownTimer from '@/src/components/CountdownTimer';
-import { Award, Flame, Lock, CheckCircle2, HelpCircle, ShieldAlert, Users } from 'lucide-react';
+import Toast, { ToastMessage } from '@/src/components/Toast';
+import { Award, Flame, Lock, HelpCircle } from 'lucide-react';
 import { createClient } from '@/src/lib/supabase/client';
 import { EventState, Pitch, Team, Question, Judge } from '@/src/lib/types';
 import { submitJudgeScoresAction } from '@/src/app/actions/judgeActions';
@@ -83,7 +84,7 @@ export default function JudgePortalPage() {
   const [totalJudgesCount, setTotalJudgesCount] = useState<number>(6);
 
   const [loading, setLoading] = useState(false);
-  const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  const [message, setMessage] = useState<ToastMessage | null>(null);
 
   const fetchData = async () => {
     const supabase = createClient();
@@ -211,7 +212,7 @@ export default function JudgePortalPage() {
   const pitchingTeam = currentPitch?.teams;
 
   return (
-    <div className="min-h-screen flex flex-col bg-background text-gray-100">
+    <div className="min-h-screen flex flex-col" data-density="dense">
       <Navbar userRole="judge" />
 
       <main className="flex-1 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8 w-full">
@@ -219,34 +220,34 @@ export default function JudgePortalPage() {
         <CountdownTimer initialState={eventState || undefined} />
 
         {/* CURRENT PITCHING TEAM BANNER */}
-        <div className="glass-panel rounded-3xl p-6 sm:p-8 border border-surface-border flex flex-col md:flex-row items-center justify-between gap-6 relative overflow-hidden">
+        <div className="panel rounded-3xl p-6 sm:p-8 flex flex-col md:flex-row items-center justify-between gap-6 relative overflow-hidden">
           <div className="space-y-2 text-center md:text-left">
-            <div className="inline-flex items-center space-x-2 px-3 py-1 rounded-full bg-brand-purple/20 text-brand-purple border border-brand-purple/40 text-xs font-bold uppercase tracking-wider">
+            <div className="inline-flex items-center space-x-2 px-3 py-1 rounded-full bg-brand-500/15 text-brand-500 border border-brand-500/40 text-xs font-bold uppercase tracking-wider">
               <Award className="w-4 h-4" />
               <span>JUDGING PANEL • LIVE EVALUATION</span>
             </div>
 
             {pitchingTeam ? (
               <div>
-                <h1 className="text-3xl sm:text-4xl font-extrabold text-white">{pitchingTeam.team_name}</h1>
-                <p className="text-xs text-gray-400 mt-1">
-                  Domain: <span className="text-brand-gold font-bold">{pitchingTeam.domain}</span> • Pool <span className="text-brand-cyan font-bold">{pitchingTeam.pool}</span>
+                <h1 className="font-display text-3xl sm:text-4xl font-bold text-text-primary">{pitchingTeam.team_name}</h1>
+                <p className="text-xs text-text-secondary mt-1">
+                  Domain: <span className="text-accent-warm font-bold">{pitchingTeam.domain}</span> • Pool <span className="text-brand-500 font-bold">{pitchingTeam.pool}</span>
                 </p>
               </div>
             ) : (
-              <h2 className="text-xl font-bold text-gray-400">Waiting for Organiser to start pitch...</h2>
+              <h2 className="text-xl font-bold text-text-secondary">Waiting for Organiser to start pitch...</h2>
             )}
           </div>
 
           {/* JUDGE PROGRESS INDICATOR */}
-          <div className="bg-gray-900/80 p-4 rounded-2xl border border-gray-800 text-center shrink-0 min-w-[200px]">
-            <span className="text-[11px] text-gray-400 uppercase tracking-wider font-mono block">Judges Submitted</span>
-            <span className="text-2xl font-black text-brand-cyan font-mono">
+          <div className="bg-white/[0.03] p-4 rounded-2xl border border-panel-border text-center shrink-0 min-w-[200px]">
+            <span className="text-[11px] text-text-secondary uppercase tracking-wider font-mono block">Judges Submitted</span>
+            <span className="text-2xl font-black text-brand-500 font-mono tabular-nums">
               {judgesSubmittedCount} / {totalJudgesCount}
             </span>
-            <div className="w-full bg-gray-800 h-2 rounded-full mt-2 overflow-hidden">
+            <div className="w-full bg-white/5 h-2 rounded-full mt-2 overflow-hidden">
               <div
-                className="bg-brand-cyan h-full transition-all duration-500"
+                className="bg-brand-500 h-full transition-all duration-500"
                 style={{ width: `${(judgesSubmittedCount / totalJudgesCount) * 100}%` }}
               />
             </div>
@@ -257,40 +258,30 @@ export default function JudgePortalPage() {
         {currentPitch && pitchingTeam ? (
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
             {/* 4 RUBRIC SCORING FORM (2 COLUMNS IN LG) */}
-            <div className="lg:col-span-2 glass-card rounded-2xl p-6 border border-surface-border space-y-6">
+            <div className="lg:col-span-2 card rounded-2xl p-6 space-y-6">
               <div className="flex items-center justify-between">
-                <h3 className="text-lg font-bold text-white flex items-center space-x-2">
-                  <Award className="w-5 h-5 text-brand-purple" />
+                <h3 className="text-lg font-bold text-text-primary flex items-center space-x-2">
+                  <Award className="w-5 h-5 text-brand-500" />
                   <span>Evaluation Rubric (1–10 Scale)</span>
                 </h3>
                 {isLocked && (
-                  <span className="px-3 py-1 rounded-full text-xs font-bold bg-amber-500/20 text-amber-300 border border-amber-500/40 flex items-center space-x-1">
+                  <span className="px-3 py-1 rounded-full text-xs font-bold bg-accent-warm/15 text-accent-warm border border-accent-warm/40 flex items-center space-x-1">
                     <Lock className="w-3.5 h-3.5 mr-1" />
                     <span>LOCKED</span>
                   </span>
                 )}
               </div>
 
-              {message && (
-                <div
-                  className={`p-3.5 rounded-xl text-xs font-semibold border ${
-                    message.type === 'success'
-                      ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40'
-                      : 'bg-red-500/20 text-red-300 border-red-500/40'
-                  }`}
-                >
-                  {message.text}
-                </div>
-              )}
+              <Toast message={message} />
 
               <form onSubmit={handleSubmitScores} className="space-y-5">
                 {/* 1. Problem & Market Insight (20%) */}
-                <div className="p-4 rounded-xl bg-gray-900/70 border border-gray-800 space-y-2">
+                <div className="p-4 rounded-xl bg-white/[0.03] border border-panel-border space-y-2">
                   <div className="flex justify-between items-center text-sm font-semibold">
-                    <span className="text-gray-200">1. Problem & Market Insight (20%)</span>
-                    <span className="text-base font-bold font-mono text-brand-purple">{probMarket} / 10</span>
+                    <span className="text-text-primary">1. Problem & Market Insight (20%)</span>
+                    <span className="text-base font-bold font-mono tabular-nums text-brand-500">{probMarket} / 10</span>
                   </div>
-                  <p className="text-[11px] text-gray-400">Clarity of problem statement, target audience size, customer pain points.</p>
+                  <p className="text-[11px] text-text-secondary">Clarity of problem statement, target audience size, customer pain points.</p>
                   <input
                     type="range"
                     min="1"
@@ -298,17 +289,17 @@ export default function JudgePortalPage() {
                     disabled={isLocked}
                     value={probMarket}
                     onChange={(e) => setProbMarket(Number(e.target.value))}
-                    className="w-full accent-brand-purple disabled:opacity-50"
+                    className="w-full accent-brand-500 disabled:opacity-50"
                   />
                 </div>
 
                 {/* 2. Solution & Innovation (20%) */}
-                <div className="p-4 rounded-xl bg-gray-900/70 border border-gray-800 space-y-2">
+                <div className="p-4 rounded-xl bg-white/[0.03] border border-panel-border space-y-2">
                   <div className="flex justify-between items-center text-sm font-semibold">
-                    <span className="text-gray-200">2. Solution & Innovation (20%)</span>
-                    <span className="text-base font-bold font-mono text-brand-purple">{solInnovation} / 10</span>
+                    <span className="text-text-primary">2. Solution & Innovation (20%)</span>
+                    <span className="text-base font-bold font-mono tabular-nums text-brand-500">{solInnovation} / 10</span>
                   </div>
-                  <p className="text-[11px] text-gray-400">Uniqueness, novelty, IP potential, technical defensibility.</p>
+                  <p className="text-[11px] text-text-secondary">Uniqueness, novelty, IP potential, technical defensibility.</p>
                   <input
                     type="range"
                     min="1"
@@ -316,17 +307,17 @@ export default function JudgePortalPage() {
                     disabled={isLocked}
                     value={solInnovation}
                     onChange={(e) => setSolInnovation(Number(e.target.value))}
-                    className="w-full accent-brand-purple disabled:opacity-50"
+                    className="w-full accent-brand-500 disabled:opacity-50"
                   />
                 </div>
 
                 {/* 3. Feasibility & Business Model (15%) */}
-                <div className="p-4 rounded-xl bg-gray-900/70 border border-gray-800 space-y-2">
+                <div className="p-4 rounded-xl bg-white/[0.03] border border-panel-border space-y-2">
                   <div className="flex justify-between items-center text-sm font-semibold">
-                    <span className="text-gray-200">3. Feasibility & Business Model (15%)</span>
-                    <span className="text-base font-bold font-mono text-brand-purple">{feasibility} / 10</span>
+                    <span className="text-text-primary">3. Feasibility & Business Model (15%)</span>
+                    <span className="text-base font-bold font-mono tabular-nums text-brand-500">{feasibility} / 10</span>
                   </div>
-                  <p className="text-[11px] text-gray-400">Monetization strategy, go-to-market plan, unit economics, execution capability.</p>
+                  <p className="text-[11px] text-text-secondary">Monetization strategy, go-to-market plan, unit economics, execution capability.</p>
                   <input
                     type="range"
                     min="1"
@@ -334,17 +325,17 @@ export default function JudgePortalPage() {
                     disabled={isLocked}
                     value={feasibility}
                     onChange={(e) => setFeasibility(Number(e.target.value))}
-                    className="w-full accent-brand-purple disabled:opacity-50"
+                    className="w-full accent-brand-500 disabled:opacity-50"
                   />
                 </div>
 
                 {/* 4. Pitch & Storytelling (15%) */}
-                <div className="p-4 rounded-xl bg-gray-900/70 border border-gray-800 space-y-2">
+                <div className="p-4 rounded-xl bg-white/[0.03] border border-panel-border space-y-2">
                   <div className="flex justify-between items-center text-sm font-semibold">
-                    <span className="text-gray-200">4. Pitch & Storytelling (15%)</span>
-                    <span className="text-base font-bold font-mono text-brand-purple">{storytelling} / 10</span>
+                    <span className="text-text-primary">4. Pitch & Storytelling (15%)</span>
+                    <span className="text-base font-bold font-mono tabular-nums text-brand-500">{storytelling} / 10</span>
                   </div>
-                  <p className="text-[11px] text-gray-400">Presentation flow, confidence, slide design, time management.</p>
+                  <p className="text-[11px] text-text-secondary">Presentation flow, confidence, slide design, time management.</p>
                   <input
                     type="range"
                     min="1"
@@ -352,7 +343,7 @@ export default function JudgePortalPage() {
                     disabled={isLocked}
                     value={storytelling}
                     onChange={(e) => setStorytelling(Number(e.target.value))}
-                    className="w-full accent-brand-purple disabled:opacity-50"
+                    className="w-full accent-brand-500 disabled:opacity-50"
                   />
                 </div>
 
@@ -360,13 +351,13 @@ export default function JudgePortalPage() {
                   <button
                     type="submit"
                     disabled={loading}
-                    className="w-full py-3.5 rounded-xl font-bold text-sm bg-brand-purple hover:bg-brand-purple/90 text-white transition-all shadow-purple-glow flex items-center justify-center space-x-2"
+                    className="w-full py-3.5 rounded-xl font-bold text-sm bg-brand-500 hover:bg-brand-500/90 text-white transition-all shadow-brand-glow flex items-center justify-center space-x-2"
                   >
                     <Lock className="w-4 h-4" />
                     <span>{loading ? 'Submitting & Locking...' : 'Submit & Lock Scores for this Pitch'}</span>
                   </button>
                 ) : (
-                  <div className="p-4 text-center bg-gray-900 border border-gray-800 rounded-xl text-xs text-gray-400">
+                  <div className="p-4 text-center bg-white/[0.02] border border-panel-border rounded-xl text-xs text-text-secondary">
                     Your scores are locked for this pitch. Only the Organiser can unlock if an adjustment is required.
                   </div>
                 )}
@@ -374,27 +365,27 @@ export default function JudgePortalPage() {
             </div>
 
             {/* CONTEXT SIDEBAR: APPROVED AUDIENCE QUESTIONS */}
-            <div className="glass-card rounded-2xl p-6 border border-surface-border space-y-4">
-              <h3 className="text-base font-bold text-white flex items-center space-x-2">
-                <HelpCircle className="w-4 h-4 text-brand-pink" />
+            <div className="card rounded-2xl p-6 space-y-4">
+              <h3 className="text-base font-bold text-text-primary flex items-center space-x-2">
+                <HelpCircle className="w-4 h-4 text-accent-live" />
                 <span>Approved Q&A Context</span>
               </h3>
 
               {approvedQuestions.length === 0 ? (
-                <p className="text-xs text-gray-500 italic">No approved audience questions for this pitch yet.</p>
+                <p className="text-xs text-text-secondary italic">No approved audience questions for this pitch yet.</p>
               ) : (
                 <div className="space-y-3">
                   {approvedQuestions.map((q) => (
-                    <div key={q.id} className="p-3 rounded-xl bg-gray-900/90 border border-gray-800 space-y-1.5">
-                      <p className="text-xs text-gray-200 font-medium">{q.question_text}</p>
-                      <div className="flex items-center justify-between text-[10px] text-gray-400">
-                        <span>Asked by: <strong className="text-gray-300">{q.asking_team?.team_name || 'Rival Team'}</strong></span>
+                    <div key={q.id} className="p-3 rounded-xl bg-white/[0.03] border border-panel-border space-y-1.5">
+                      <p className="text-xs text-text-primary font-medium">{q.question_text}</p>
+                      <div className="flex items-center justify-between text-[10px] text-text-secondary">
+                        <span>Asked by: <strong className="text-text-primary/80">{q.asking_team?.team_name || 'Rival Team'}</strong></span>
                         {q.outcome && (
                           <span
                             className={`px-1.5 py-0.5 rounded font-bold uppercase ${
                               q.outcome === 'team_answered_well'
-                                ? 'bg-emerald-500/20 text-emerald-400'
-                                : 'bg-red-500/20 text-red-400'
+                                ? 'bg-success-500/15 text-success-500'
+                                : 'bg-danger-500/15 text-danger-500'
                             }`}
                           >
                             {q.outcome === 'team_answered_well' ? 'Answered Well (+1)' : 'Poor Answer (-1)'}
@@ -408,10 +399,10 @@ export default function JudgePortalPage() {
             </div>
           </div>
         ) : (
-          <div className="glass-card rounded-2xl p-12 text-center border border-surface-border">
-            <Flame className="w-12 h-12 text-gray-600 mx-auto mb-3" />
-            <h3 className="text-lg font-bold text-gray-300">No Pitch Currently Live</h3>
-            <p className="text-xs text-gray-400 mt-1">Please wait for the event organiser to activate the next pitch.</p>
+          <div className="card rounded-2xl p-12 text-center">
+            <Flame className="w-12 h-12 text-text-secondary/50 mx-auto mb-3" />
+            <h3 className="text-lg font-bold text-text-primary">No Pitch Currently Live</h3>
+            <p className="text-xs text-text-secondary mt-1">Please wait for the event organiser to activate the next pitch.</p>
           </div>
         )}
       </main>
