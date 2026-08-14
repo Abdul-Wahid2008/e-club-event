@@ -97,73 +97,73 @@ export default function CountdownTimer({
   const getPhaseBadge = (phase?: TimerPhase) => {
     switch (phase) {
       case 'prep':
-        return <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-amber-500/20 text-amber-300 border border-amber-500/40">10-MIN PREP</span>;
+        return <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-orange-50 text-ink-900 border border-accent-warm/50">10-MIN PREP</span>;
       case 'pitch':
-        return <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-brand-cyan/20 text-brand-cyan border border-brand-cyan/40">3-MIN PITCH</span>;
+        return <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-blue-50 text-ink-900 border border-brand-600/40">3-MIN PITCH</span>;
       case 'qa':
-        return <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-brand-pink/20 text-brand-pink border border-brand-pink/40">2-MIN Q&A</span>;
+        return <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-red-50 text-ink-900 border border-accent-500/40">2-MIN Q&amp;A</span>;
       case 'paused':
-        return <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-gray-600/30 text-gray-400 border border-gray-600/40">PAUSED</span>;
+        return <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-surface-base text-ink-600 border border-ink-900/15">PAUSED</span>;
       default:
-        return <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-gray-800 text-gray-400">IDLE</span>;
+        return <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-surface-base text-ink-600 border border-ink-900/10">IDLE</span>;
     }
   };
 
   const isLowTime = secondsLeft <= 30 && eventState?.timer_phase !== 'idle' && eventState?.timer_phase !== 'paused';
 
   return (
-    <div className="glass-card rounded-xl p-4 flex flex-col md:flex-row items-center justify-between gap-4 border border-surface-border">
+    <div className="card rounded-xl p-4 flex flex-col md:flex-row items-center justify-between gap-4">
       <div className="flex items-center space-x-3">
-        <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${isLowTime ? 'bg-red-500/20 text-red-400 animate-bounce' : 'bg-brand-cyan/10 text-brand-cyan'}`}>
+        <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${isLowTime ? 'bg-red-50 text-danger-600' : 'bg-blue-50 text-brand-600'}`}>
           <Clock className="w-5 h-5" />
         </div>
         <div>
           <div className="flex items-center space-x-2">
-            <span className="text-xs uppercase tracking-wider text-gray-400 font-mono">Live Timer</span>
+            <span className="text-xs uppercase tracking-wider text-ink-600 font-semibold">Live Timer</span>
             {getPhaseBadge(eventState?.timer_phase)}
           </div>
-          <p className="text-xs text-gray-400">Synced across Team, Judge, Organiser screens</p>
+          <p className="text-xs text-ink-600">Synced across Team, Judge, Organiser screens</p>
         </div>
       </div>
 
       <div className="flex items-center space-x-6">
-        <div className={`font-mono text-3xl md:text-4xl font-extrabold tracking-widest ${isLowTime ? 'text-red-500 animate-pulse' : 'text-white'}`}>
+        <div className={`tabular-nums text-3xl md:text-4xl font-bold tracking-wide ${isLowTime ? 'text-danger-600' : 'text-ink-900'}`}>
           {formatTime(secondsLeft)}
         </div>
 
         {showControls && onPhaseChange && (
-          <div className="flex items-center space-x-1.5 bg-gray-900/80 p-1.5 rounded-lg border border-gray-800">
+          <div className="flex items-center space-x-1.5 bg-surface-base p-1.5 rounded-lg border border-ink-900/10">
             <button
               onClick={() => onPhaseChange('prep', 600)}
-              className="px-2.5 py-1 text-[11px] font-semibold bg-amber-500/20 text-amber-300 hover:bg-amber-500/30 rounded transition-colors"
+              className="px-2.5 py-1 text-[11px] font-semibold bg-white text-ink-900 hover:bg-orange-50 border border-ink-900/10 rounded transition-colors"
               title="10 Min Prep Phase"
             >
               Prep (10m)
             </button>
             <button
               onClick={() => onPhaseChange('pitch', 180)}
-              className="px-2.5 py-1 text-[11px] font-semibold bg-brand-cyan/20 text-brand-cyan hover:bg-brand-cyan/30 rounded transition-colors"
+              className="px-2.5 py-1 text-[11px] font-semibold bg-white text-ink-900 hover:bg-blue-50 border border-ink-900/10 rounded transition-colors"
               title="3 Min Pitching Phase"
             >
               Pitch (3m)
             </button>
             <button
               onClick={() => onPhaseChange('qa', 120)}
-              className="px-2.5 py-1 text-[11px] font-semibold bg-brand-pink/20 text-brand-pink hover:bg-brand-pink/30 rounded transition-colors"
+              className="px-2.5 py-1 text-[11px] font-semibold bg-white text-ink-900 hover:bg-red-50 border border-ink-900/10 rounded transition-colors"
               title="2 Min Q&A Phase"
             >
-              Q&A (2m)
+              Q&amp;A (2m)
             </button>
             <button
               onClick={() => onPhaseChange('paused')}
-              className="px-2 py-1 text-[11px] font-semibold bg-gray-800 text-gray-300 hover:bg-gray-700 rounded transition-colors"
+              className="px-2 py-1 text-[11px] font-semibold bg-white text-ink-900 hover:bg-ink-900/5 border border-ink-900/10 rounded transition-colors"
               title="Pause Timer"
             >
               <Pause className="w-3.5 h-3.5" />
             </button>
             <button
               onClick={() => onPhaseChange('idle')}
-              className="px-2 py-1 text-[11px] font-semibold bg-gray-800 text-gray-300 hover:bg-gray-700 rounded transition-colors"
+              className="px-2 py-1 text-[11px] font-semibold bg-white text-ink-900 hover:bg-ink-900/5 border border-ink-900/10 rounded transition-colors"
               title="Reset Timer"
             >
               Reset
