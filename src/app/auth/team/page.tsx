@@ -18,6 +18,7 @@ export default function TeamAuthPage() {
 
   const handleRequestOtp = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (loading) return;
     setError(null);
     setSuccessMsg(null);
 
@@ -44,6 +45,7 @@ export default function TeamAuthPage() {
 
   const handleVerifyOtp = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (loading) return;
     setError(null);
 
     if (!otpToken || otpToken.trim().length < 6) {
@@ -64,31 +66,31 @@ export default function TeamAuthPage() {
   };
 
   return (
-    <div className="min-h-screen flex flex-col bg-background text-gray-100">
+    <div className="min-h-screen flex flex-col bg-surface-base text-ink-900">
       <Navbar />
 
       <main className="flex-1 flex items-center justify-center p-4">
-        <div className="w-full max-w-md glass-panel rounded-3xl p-8 border border-surface-border space-y-6 shadow-2xl relative">
+        <div className="w-full max-w-md card rounded-3xl p-8 space-y-6 shadow-card-lg relative">
           <div className="text-center space-y-2">
-            <div className="w-12 h-12 rounded-2xl bg-brand-cyan/10 text-brand-cyan flex items-center justify-center mx-auto border border-brand-cyan/30 shadow-cyan-glow">
+            <div className="w-12 h-12 rounded-2xl bg-blue-50 text-brand-600 flex items-center justify-center mx-auto">
               <Mail className="w-6 h-6" />
             </div>
-            <h1 className="text-2xl font-extrabold text-white tracking-tight">Team Authentication</h1>
-            <p className="text-xs text-gray-400">
+            <h1 className="text-2xl font-semibold text-ink-900 tracking-tight">Team Authentication</h1>
+            <p className="text-xs text-ink-600">
               Enter any valid email address to receive your OTP code.
             </p>
           </div>
 
           {error && (
-            <div className="p-3.5 rounded-xl text-xs font-semibold bg-red-500/20 text-red-300 border border-red-500/40 flex items-start space-x-2">
-              <ShieldAlert className="w-4 h-4 text-red-400 shrink-0 mt-0.5" />
+            <div role="alert" className="p-3.5 rounded-xl text-xs font-semibold bg-red-50 text-ink-900 border border-danger-600/30 flex items-start space-x-2">
+              <ShieldAlert className="w-4 h-4 text-danger-600 shrink-0 mt-0.5" />
               <span>{error}</span>
             </div>
           )}
 
           {successMsg && (
-            <div className="p-3.5 rounded-xl text-xs font-semibold bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 flex items-start space-x-2">
-              <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
+            <div role="status" className="p-3.5 rounded-xl text-xs font-semibold bg-green-50 text-ink-900 border border-success-600/30 flex items-start space-x-2">
+              <CheckCircle2 className="w-4 h-4 text-success-600 shrink-0 mt-0.5" />
               <span>{successMsg}</span>
             </div>
           )}
@@ -96,18 +98,18 @@ export default function TeamAuthPage() {
           {step === 'request' ? (
             <form onSubmit={handleRequestOtp} className="space-y-4">
               <div>
-                <label className="block text-xs font-semibold text-gray-300 mb-1.5 uppercase tracking-wider">
+                <label className="block text-xs font-semibold text-ink-600 mb-1.5 uppercase tracking-wider">
                   Leader Email
                 </label>
                 <div className="relative">
-                  <Mail className="w-4 h-4 text-gray-500 absolute left-3.5 top-3.5" />
+                  <Mail className="w-4 h-4 text-ink-600/60 absolute left-3.5 top-3.5" />
                   <input
                     type="email"
                     required
                     placeholder="you@example.com"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
-                    className="w-full bg-gray-900 border border-gray-700 rounded-xl pl-10 pr-4 py-3 text-sm text-white focus:outline-none focus:border-brand-cyan transition-colors font-mono"
+                    className="w-full bg-surface-base border border-ink-900/15 rounded-xl pl-10 pr-4 py-3 text-sm text-ink-900 focus:outline-none focus:ring-2 focus:ring-brand-600/30 focus:border-brand-600 transition-colors"
                   />
                 </div>
               </div>
@@ -115,20 +117,21 @@ export default function TeamAuthPage() {
               <button
                 type="submit"
                 disabled={loading}
-                className="w-full py-3.5 rounded-xl font-bold text-sm bg-brand-cyan hover:bg-brand-cyan/90 text-black transition-all shadow-cyan-glow flex items-center justify-center space-x-2"
+                aria-busy={loading}
+                className="w-full py-3.5 rounded-xl font-semibold text-sm bg-brand-600 hover:bg-brand-700 disabled:opacity-60 disabled:cursor-not-allowed text-white transition-colors flex items-center justify-center space-x-2"
               >
                 <span>{loading ? 'Sending OTP...' : 'Send Magic OTP Code'}</span>
-                <ArrowRight className="w-4 h-4" />
+                {!loading && <ArrowRight className="w-4 h-4" />}
               </button>
             </form>
           ) : (
             <form onSubmit={handleVerifyOtp} className="space-y-4">
               <div>
-                <label className="block text-xs font-semibold text-gray-300 mb-1.5 uppercase tracking-wider">
+                <label className="block text-xs font-semibold text-ink-600 mb-1.5 uppercase tracking-wider">
                   Enter 6-Digit OTP Code
                 </label>
                 <div className="relative">
-                  <KeyRound className="w-4 h-4 text-gray-500 absolute left-3.5 top-3.5" />
+                  <KeyRound className="w-4 h-4 text-ink-600/60 absolute left-3.5 top-3.5" />
                   <input
                     type="text"
                     required
@@ -136,7 +139,7 @@ export default function TeamAuthPage() {
                     placeholder="123456"
                     value={otpToken}
                     onChange={(e) => setOtpToken(e.target.value)}
-                    className="w-full bg-gray-900 border border-gray-700 rounded-xl pl-10 pr-4 py-3 text-center text-lg tracking-widest font-mono text-white focus:outline-none focus:border-brand-cyan transition-colors"
+                    className="tabular-nums w-full bg-surface-base border border-ink-900/15 rounded-xl pl-10 pr-4 py-3 text-center text-lg tracking-widest text-ink-900 focus:outline-none focus:ring-2 focus:ring-brand-600/30 focus:border-brand-600 transition-colors"
                   />
                 </div>
               </div>
@@ -144,16 +147,17 @@ export default function TeamAuthPage() {
               <button
                 type="submit"
                 disabled={loading}
-                className="w-full py-3.5 rounded-xl font-bold text-sm bg-brand-cyan hover:bg-brand-cyan/90 text-black transition-all shadow-cyan-glow flex items-center justify-center space-x-2"
+                aria-busy={loading}
+                className="w-full py-3.5 rounded-xl font-semibold text-sm bg-brand-600 hover:bg-brand-700 disabled:opacity-60 disabled:cursor-not-allowed text-white transition-colors flex items-center justify-center space-x-2"
               >
                 <span>{loading ? 'Verifying OTP...' : 'Verify OTP & Proceed'}</span>
-                <ArrowRight className="w-4 h-4" />
+                {!loading && <ArrowRight className="w-4 h-4" />}
               </button>
 
               <button
                 type="button"
                 onClick={() => setStep('request')}
-                className="w-full text-center text-xs text-gray-400 hover:text-gray-200 underline pt-2"
+                className="w-full text-center text-xs text-ink-600 hover:text-ink-900 underline pt-2"
               >
                 Change Email
               </button>
