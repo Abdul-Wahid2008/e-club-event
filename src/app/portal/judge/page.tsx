@@ -3,87 +3,33 @@
 import { useState, useEffect } from 'react';
 import Navbar from '@/src/components/Navbar';
 import CountdownTimer from '@/src/components/CountdownTimer';
-import { Award, Flame, Lock, CheckCircle2, HelpCircle, ShieldAlert, Users } from 'lucide-react';
+import { Award, Flame, Lock, HelpCircle } from 'lucide-react';
 import { createClient } from '@/src/lib/supabase/client';
 import { EventState, Pitch, Team, Question, Judge } from '@/src/lib/types';
 import { submitJudgeScoresAction } from '@/src/app/actions/judgeActions';
-
-const MOCK_PITCHING_TEAM: Team = {
-  id: 'mock-team-1',
-  auth_user_id: 'mock-user-1',
-  team_name: 'MedPulse AI',
-  domain: 'Healthcare',
-  pool: 'A',
-  status: 'registered',
-  created_at: new Date().toISOString(),
-};
-
-const MOCK_CURRENT_PITCH: Pitch & { teams?: Team } = {
-  id: 'mock-pitch-1',
-  team_id: 'mock-team-1',
-  round_id: 'mock-round-1',
-  status: 'live',
-  pitch_order: 1,
-  teams: MOCK_PITCHING_TEAM,
-};
-
-const MOCK_EVENT_STATE: EventState = {
-  id: 1,
-  current_pitch_id: 'mock-pitch-1',
-  current_round_id: 'mock-round-1',
-  timer_phase: 'pitch',
-  timer_duration_seconds: 180,
-  timer_started_at: new Date(Date.now() - 45000).toISOString(),
-  timer_paused_remaining: null,
-  updated_at: new Date().toISOString(),
-};
-
-const MOCK_APPROVED_QUESTIONS: Question[] = [
-  {
-    id: 'mock-q-101',
-    asking_team_id: 'mock-team-3',
-    pitch_id: 'mock-pitch-1',
-    question_text: 'How do you train your diagnostic model while ensuring compliance with HIPAA & DPDP laws in India?',
-    status: 'approved',
-    outcome: 'team_answered_well',
-    points_to_team: 1,
-    points_to_asker: 0,
-    created_at: new Date(Date.now() - 120000).toISOString(),
-    asking_team: {
-      id: 'mock-team-3',
-      auth_user_id: 'mock-user-3',
-      team_name: 'FinFlex Pay',
-      domain: 'FinTech',
-      pool: 'A',
-      status: 'registered',
-      created_at: new Date().toISOString(),
-    },
-  },
-];
+import PoolBadge from '@/src/components/PoolBadge';
+import Toast, { ToastMessage } from '@/src/components/Toast';
+import { SkeletonCard } from '@/src/components/Skeleton';
 
 export default function JudgePortalPage() {
-  const [judgeProfile, setJudgeProfile] = useState<Judge | null>({
-    id: 'mock-judge-1',
-    auth_user_id: 'mock-user-j1',
-    name: 'Judge Dr. Sharma',
-    email: 'judge1@student.nitw.ac.in',
-  });
-  const [eventState, setEventState] = useState<EventState | null>(MOCK_EVENT_STATE);
-  const [currentPitch, setCurrentPitch] = useState<(Pitch & { teams?: Team }) | null>(MOCK_CURRENT_PITCH);
-  const [approvedQuestions, setApprovedQuestions] = useState<Question[]>(MOCK_APPROVED_QUESTIONS);
+  const [judgeProfile, setJudgeProfile] = useState<Judge | null>(null);
+  const [eventState, setEventState] = useState<EventState | null>(null);
+  const [currentPitch, setCurrentPitch] = useState<(Pitch & { teams?: Team }) | null>(null);
+  const [approvedQuestions, setApprovedQuestions] = useState<Question[]>([]);
+  const [initialLoading, setInitialLoading] = useState(true);
 
   // 4 Rubric Sliders (1 to 10)
-  const [probMarket, setProbMarket] = useState<number>(8);
-  const [solInnovation, setSolInnovation] = useState<number>(9);
-  const [feasibility, setFeasibility] = useState<number>(8);
-  const [storytelling, setStorytelling] = useState<number>(9);
+  const [probMarket, setProbMarket] = useState<number>(5);
+  const [solInnovation, setSolInnovation] = useState<number>(5);
+  const [feasibility, setFeasibility] = useState<number>(5);
+  const [storytelling, setStorytelling] = useState<number>(5);
 
   const [isLocked, setIsLocked] = useState(false);
-  const [judgesSubmittedCount, setJudgesSubmittedCount] = useState<number>(4);
-  const [totalJudgesCount, setTotalJudgesCount] = useState<number>(6);
+  const [judgesSubmittedCount, setJudgesSubmittedCount] = useState<number>(0);
+  const [totalJudgesCount, setTotalJudgesCount] = useState<number>(1);
 
   const [loading, setLoading] = useState(false);
-  const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  const [message, setMessage] = useState<ToastMessage | null>(null);
 
   const fetchData = async () => {
     const supabase = createClient();
@@ -95,7 +41,7 @@ export default function JudgePortalPage() {
 
       // Total Judges
       const { data: allJudges } = await supabase.from('judges').select('id');
-      if (allJudges) setTotalJudgesCount(allJudges.length || 6);
+      if (allJudges) setTotalJudgesCount(allJudges.length || 1);
 
       // Event State & Current Pitch
       const { data: es } = await supabase.from('event_state').select('*').eq('id', 1).single();
@@ -163,6 +109,7 @@ export default function JudgePortalPage() {
         }
       }
     }
+    setInitialLoading(false);
   };
 
   useEffect(() => {
@@ -184,7 +131,7 @@ export default function JudgePortalPage() {
 
   const handleSubmitScores = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!currentPitch) return;
+    if (!currentPitch || loading) return;
     setLoading(true);
     setMessage(null);
 
@@ -210,8 +157,20 @@ export default function JudgePortalPage() {
 
   const pitchingTeam = currentPitch?.teams;
 
+  if (initialLoading) {
+    return (
+      <div className="min-h-screen flex flex-col bg-surface-base text-ink-900">
+        <Navbar userRole="judge" />
+        <main className="flex-1 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8 w-full">
+          <SkeletonCard />
+          <SkeletonCard />
+        </main>
+      </div>
+    );
+  }
+
   return (
-    <div className="min-h-screen flex flex-col bg-background text-gray-100">
+    <div className="min-h-screen flex flex-col bg-surface-base text-ink-900">
       <Navbar userRole="judge" />
 
       <main className="flex-1 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8 w-full">
@@ -219,34 +178,35 @@ export default function JudgePortalPage() {
         <CountdownTimer initialState={eventState || undefined} />
 
         {/* CURRENT PITCHING TEAM BANNER */}
-        <div className="glass-panel rounded-3xl p-6 sm:p-8 border border-surface-border flex flex-col md:flex-row items-center justify-between gap-6 relative overflow-hidden">
+        <div className="card rounded-3xl p-6 sm:p-8 flex flex-col md:flex-row items-center justify-between gap-6">
           <div className="space-y-2 text-center md:text-left">
-            <div className="inline-flex items-center space-x-2 px-3 py-1 rounded-full bg-brand-purple/20 text-brand-purple border border-brand-purple/40 text-xs font-bold uppercase tracking-wider">
+            <div className="inline-flex items-center space-x-2 px-3 py-1 rounded-full bg-blue-50 text-brand-700 border border-brand-600/30 text-xs font-semibold uppercase tracking-wider">
               <Award className="w-4 h-4" />
-              <span>JUDGING PANEL • LIVE EVALUATION</span>
+              <span>Judging Panel &bull; Live Evaluation</span>
             </div>
 
             {pitchingTeam ? (
               <div>
-                <h1 className="text-3xl sm:text-4xl font-extrabold text-white">{pitchingTeam.team_name}</h1>
-                <p className="text-xs text-gray-400 mt-1">
-                  Domain: <span className="text-brand-gold font-bold">{pitchingTeam.domain}</span> • Pool <span className="text-brand-cyan font-bold">{pitchingTeam.pool}</span>
-                </p>
+                <h1 className="text-3xl sm:text-4xl font-semibold text-ink-900">{pitchingTeam.team_name}</h1>
+                <div className="flex items-center justify-center md:justify-start gap-2 text-xs text-ink-600 mt-1">
+                  <span>Domain: <span className="text-ink-900 font-semibold">{pitchingTeam.domain}</span></span>
+                  <PoolBadge pool={pitchingTeam.pool} />
+                </div>
               </div>
             ) : (
-              <h2 className="text-xl font-bold text-gray-400">Waiting for Organiser to start pitch...</h2>
+              <h2 className="text-xl font-semibold text-ink-600">Waiting for Organiser to start pitch...</h2>
             )}
           </div>
 
           {/* JUDGE PROGRESS INDICATOR */}
-          <div className="bg-gray-900/80 p-4 rounded-2xl border border-gray-800 text-center shrink-0 min-w-[200px]">
-            <span className="text-[11px] text-gray-400 uppercase tracking-wider font-mono block">Judges Submitted</span>
-            <span className="text-2xl font-black text-brand-cyan font-mono">
+          <div className="bg-surface-base p-4 rounded-2xl border border-ink-900/10 text-center shrink-0 min-w-[200px]">
+            <span className="text-[11px] text-ink-600 uppercase tracking-wider block">Judges Submitted</span>
+            <span className="tabular-nums text-2xl font-bold text-brand-700">
               {judgesSubmittedCount} / {totalJudgesCount}
             </span>
-            <div className="w-full bg-gray-800 h-2 rounded-full mt-2 overflow-hidden">
+            <div className="w-full bg-ink-900/10 h-2 rounded-full mt-2 overflow-hidden">
               <div
-                className="bg-brand-cyan h-full transition-all duration-500"
+                className="bg-brand-600 h-full transition-all duration-500"
                 style={{ width: `${(judgesSubmittedCount / totalJudgesCount) * 100}%` }}
               />
             </div>
@@ -257,40 +217,30 @@ export default function JudgePortalPage() {
         {currentPitch && pitchingTeam ? (
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
             {/* 4 RUBRIC SCORING FORM (2 COLUMNS IN LG) */}
-            <div className="lg:col-span-2 glass-card rounded-2xl p-6 border border-surface-border space-y-6">
+            <div className="lg:col-span-2 card rounded-2xl p-6 space-y-6">
               <div className="flex items-center justify-between">
-                <h3 className="text-lg font-bold text-white flex items-center space-x-2">
-                  <Award className="w-5 h-5 text-brand-purple" />
-                  <span>Evaluation Rubric (1–10 Scale)</span>
+                <h3 className="text-lg font-semibold text-ink-900 flex items-center space-x-2">
+                  <Award className="w-5 h-5 text-brand-600" />
+                  <span>Evaluation Rubric (1-10 Scale)</span>
                 </h3>
                 {isLocked && (
-                  <span className="px-3 py-1 rounded-full text-xs font-bold bg-amber-500/20 text-amber-300 border border-amber-500/40 flex items-center space-x-1">
+                  <span className="px-3 py-1 rounded-full text-xs font-semibold bg-orange-50 text-ink-900 border border-accent-warm/50 flex items-center space-x-1">
                     <Lock className="w-3.5 h-3.5 mr-1" />
-                    <span>LOCKED</span>
+                    <span>Locked</span>
                   </span>
                 )}
               </div>
 
-              {message && (
-                <div
-                  className={`p-3.5 rounded-xl text-xs font-semibold border ${
-                    message.type === 'success'
-                      ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40'
-                      : 'bg-red-500/20 text-red-300 border-red-500/40'
-                  }`}
-                >
-                  {message.text}
-                </div>
-              )}
+              <Toast message={message} />
 
               <form onSubmit={handleSubmitScores} className="space-y-5">
                 {/* 1. Problem & Market Insight (20%) */}
-                <div className="p-4 rounded-xl bg-gray-900/70 border border-gray-800 space-y-2">
+                <div className="p-4 rounded-xl bg-surface-base border border-ink-900/10 space-y-2">
                   <div className="flex justify-between items-center text-sm font-semibold">
-                    <span className="text-gray-200">1. Problem & Market Insight (20%)</span>
-                    <span className="text-base font-bold font-mono text-brand-purple">{probMarket} / 10</span>
+                    <span className="text-ink-900">1. Problem &amp; Market Insight (20%)</span>
+                    <span className="tabular-nums text-base font-bold text-brand-700">{probMarket} / 10</span>
                   </div>
-                  <p className="text-[11px] text-gray-400">Clarity of problem statement, target audience size, customer pain points.</p>
+                  <p className="text-[11px] text-ink-600">Clarity of problem statement, target audience size, customer pain points.</p>
                   <input
                     type="range"
                     min="1"
@@ -298,17 +248,17 @@ export default function JudgePortalPage() {
                     disabled={isLocked}
                     value={probMarket}
                     onChange={(e) => setProbMarket(Number(e.target.value))}
-                    className="w-full accent-brand-purple disabled:opacity-50"
+                    className="w-full accent-brand-600 disabled:opacity-50"
                   />
                 </div>
 
                 {/* 2. Solution & Innovation (20%) */}
-                <div className="p-4 rounded-xl bg-gray-900/70 border border-gray-800 space-y-2">
+                <div className="p-4 rounded-xl bg-surface-base border border-ink-900/10 space-y-2">
                   <div className="flex justify-between items-center text-sm font-semibold">
-                    <span className="text-gray-200">2. Solution & Innovation (20%)</span>
-                    <span className="text-base font-bold font-mono text-brand-purple">{solInnovation} / 10</span>
+                    <span className="text-ink-900">2. Solution &amp; Innovation (20%)</span>
+                    <span className="tabular-nums text-base font-bold text-brand-700">{solInnovation} / 10</span>
                   </div>
-                  <p className="text-[11px] text-gray-400">Uniqueness, novelty, IP potential, technical defensibility.</p>
+                  <p className="text-[11px] text-ink-600">Uniqueness, novelty, IP potential, technical defensibility.</p>
                   <input
                     type="range"
                     min="1"
@@ -316,17 +266,17 @@ export default function JudgePortalPage() {
                     disabled={isLocked}
                     value={solInnovation}
                     onChange={(e) => setSolInnovation(Number(e.target.value))}
-                    className="w-full accent-brand-purple disabled:opacity-50"
+                    className="w-full accent-brand-600 disabled:opacity-50"
                   />
                 </div>
 
                 {/* 3. Feasibility & Business Model (15%) */}
-                <div className="p-4 rounded-xl bg-gray-900/70 border border-gray-800 space-y-2">
+                <div className="p-4 rounded-xl bg-surface-base border border-ink-900/10 space-y-2">
                   <div className="flex justify-between items-center text-sm font-semibold">
-                    <span className="text-gray-200">3. Feasibility & Business Model (15%)</span>
-                    <span className="text-base font-bold font-mono text-brand-purple">{feasibility} / 10</span>
+                    <span className="text-ink-900">3. Feasibility &amp; Business Model (15%)</span>
+                    <span className="tabular-nums text-base font-bold text-brand-700">{feasibility} / 10</span>
                   </div>
-                  <p className="text-[11px] text-gray-400">Monetization strategy, go-to-market plan, unit economics, execution capability.</p>
+                  <p className="text-[11px] text-ink-600">Monetization strategy, go-to-market plan, unit economics, execution capability.</p>
                   <input
                     type="range"
                     min="1"
@@ -334,17 +284,17 @@ export default function JudgePortalPage() {
                     disabled={isLocked}
                     value={feasibility}
                     onChange={(e) => setFeasibility(Number(e.target.value))}
-                    className="w-full accent-brand-purple disabled:opacity-50"
+                    className="w-full accent-brand-600 disabled:opacity-50"
                   />
                 </div>
 
                 {/* 4. Pitch & Storytelling (15%) */}
-                <div className="p-4 rounded-xl bg-gray-900/70 border border-gray-800 space-y-2">
+                <div className="p-4 rounded-xl bg-surface-base border border-ink-900/10 space-y-2">
                   <div className="flex justify-between items-center text-sm font-semibold">
-                    <span className="text-gray-200">4. Pitch & Storytelling (15%)</span>
-                    <span className="text-base font-bold font-mono text-brand-purple">{storytelling} / 10</span>
+                    <span className="text-ink-900">4. Pitch &amp; Storytelling (15%)</span>
+                    <span className="tabular-nums text-base font-bold text-brand-700">{storytelling} / 10</span>
                   </div>
-                  <p className="text-[11px] text-gray-400">Presentation flow, confidence, slide design, time management.</p>
+                  <p className="text-[11px] text-ink-600">Presentation flow, confidence, slide design, time management.</p>
                   <input
                     type="range"
                     min="1"
@@ -352,7 +302,7 @@ export default function JudgePortalPage() {
                     disabled={isLocked}
                     value={storytelling}
                     onChange={(e) => setStorytelling(Number(e.target.value))}
-                    className="w-full accent-brand-purple disabled:opacity-50"
+                    className="w-full accent-brand-600 disabled:opacity-50"
                   />
                 </div>
 
@@ -360,13 +310,14 @@ export default function JudgePortalPage() {
                   <button
                     type="submit"
                     disabled={loading}
-                    className="w-full py-3.5 rounded-xl font-bold text-sm bg-brand-purple hover:bg-brand-purple/90 text-white transition-all shadow-purple-glow flex items-center justify-center space-x-2"
+                    aria-busy={loading}
+                    className="w-full py-3.5 rounded-xl font-semibold text-sm bg-brand-600 hover:bg-brand-700 disabled:opacity-60 disabled:cursor-not-allowed text-white transition-colors flex items-center justify-center space-x-2"
                   >
                     <Lock className="w-4 h-4" />
                     <span>{loading ? 'Submitting & Locking...' : 'Submit & Lock Scores for this Pitch'}</span>
                   </button>
                 ) : (
-                  <div className="p-4 text-center bg-gray-900 border border-gray-800 rounded-xl text-xs text-gray-400">
+                  <div className="p-4 text-center bg-surface-base border border-ink-900/10 rounded-xl text-xs text-ink-600">
                     Your scores are locked for this pitch. Only the Organiser can unlock if an adjustment is required.
                   </div>
                 )}
@@ -374,27 +325,27 @@ export default function JudgePortalPage() {
             </div>
 
             {/* CONTEXT SIDEBAR: APPROVED AUDIENCE QUESTIONS */}
-            <div className="glass-card rounded-2xl p-6 border border-surface-border space-y-4">
-              <h3 className="text-base font-bold text-white flex items-center space-x-2">
-                <HelpCircle className="w-4 h-4 text-brand-pink" />
-                <span>Approved Q&A Context</span>
+            <div className="card rounded-2xl p-6 space-y-4">
+              <h3 className="text-base font-semibold text-ink-900 flex items-center space-x-2">
+                <HelpCircle className="w-4 h-4 text-accent-500" />
+                <span>Approved Q&amp;A Context</span>
               </h3>
 
               {approvedQuestions.length === 0 ? (
-                <p className="text-xs text-gray-500 italic">No approved audience questions for this pitch yet.</p>
+                <p className="text-xs text-ink-600 italic">No approved audience questions for this pitch yet.</p>
               ) : (
                 <div className="space-y-3">
                   {approvedQuestions.map((q) => (
-                    <div key={q.id} className="p-3 rounded-xl bg-gray-900/90 border border-gray-800 space-y-1.5">
-                      <p className="text-xs text-gray-200 font-medium">{q.question_text}</p>
-                      <div className="flex items-center justify-between text-[10px] text-gray-400">
-                        <span>Asked by: <strong className="text-gray-300">{q.asking_team?.team_name || 'Rival Team'}</strong></span>
+                    <div key={q.id} className="p-3 rounded-xl bg-surface-base border border-ink-900/10 space-y-1.5">
+                      <p className="text-xs text-ink-900 font-medium">{q.question_text}</p>
+                      <div className="flex items-center justify-between text-[10px] text-ink-600">
+                        <span>Asked by: <strong className="text-ink-900">{q.asking_team?.team_name || 'Rival Team'}</strong></span>
                         {q.outcome && (
                           <span
                             className={`px-1.5 py-0.5 rounded font-bold uppercase ${
                               q.outcome === 'team_answered_well'
-                                ? 'bg-emerald-500/20 text-emerald-400'
-                                : 'bg-red-500/20 text-red-400'
+                                ? 'bg-green-50 text-success-600'
+                                : 'bg-red-50 text-danger-600'
                             }`}
                           >
                             {q.outcome === 'team_answered_well' ? 'Answered Well (+1)' : 'Poor Answer (-1)'}
@@ -408,10 +359,10 @@ export default function JudgePortalPage() {
             </div>
           </div>
         ) : (
-          <div className="glass-card rounded-2xl p-12 text-center border border-surface-border">
-            <Flame className="w-12 h-12 text-gray-600 mx-auto mb-3" />
-            <h3 className="text-lg font-bold text-gray-300">No Pitch Currently Live</h3>
-            <p className="text-xs text-gray-400 mt-1">Please wait for the event organiser to activate the next pitch.</p>
+          <div className="card rounded-2xl p-12 text-center">
+            <Flame className="w-12 h-12 text-ink-900/20 mx-auto mb-3" />
+            <h3 className="text-lg font-semibold text-ink-900">No Pitch Currently Live</h3>
+            <p className="text-xs text-ink-600 mt-1">Please wait for the event organiser to activate the next pitch.</p>
           </div>
         )}
       </main>
