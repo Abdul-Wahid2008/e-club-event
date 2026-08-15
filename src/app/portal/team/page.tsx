@@ -34,7 +34,9 @@ const MOCK_CURRENT_PITCH: Pitch & { teams?: Team } = {
   team_id: 'mock-team-1',
   round_id: 'mock-round-1',
   status: 'live',
+  queue_status: 'pitching',
   pitch_order: 1,
+  queue_position_override: null,
   teams: MOCK_PITCHING_TEAM,
 };
 
@@ -42,7 +44,7 @@ const MOCK_EVENT_STATE: EventState = {
   id: 1,
   current_pitch_id: 'mock-pitch-1',
   current_round_id: 'mock-round-1',
-  timer_phase: 'pitch',
+  timer_status: 'running',
   timer_duration_seconds: 180,
   timer_started_at: new Date(Date.now() - 45000).toISOString(),
   timer_paused_remaining: null,

@@ -1,17 +1,15 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import Navbar from '@/src/components/Navbar';
-import CountdownTimer from '@/src/components/CountdownTimer';
+import PitchQueuePanel from '@/src/components/PitchQueuePanel';
 import LiveLeaderboard from '@/src/components/LiveLeaderboard';
 import ManualOverrideModal from '@/src/components/ManualOverrideModal';
 import { triggerConfetti } from '@/src/components/ConfettiEffect';
-import { ShieldAlert, Flame, Users, HelpCircle, Trophy, Download, Play, CheckCircle2, XCircle, Sparkles, Lock, RefreshCw, FileSpreadsheet } from 'lucide-react';
+import { ShieldAlert, Flame, Users, HelpCircle, Trophy, Sparkles, CheckCircle2, XCircle, FileSpreadsheet } from 'lucide-react';
 import { createClient } from '@/src/lib/supabase/client';
 import { EventState, Pitch, Team, Question, PitchLeaderboardEntry, ScoreAuditLog } from '@/src/lib/types';
 import {
-  setLivePitchAction,
-  updateTimerStateAction,
   reviewQuestionAction,
   qualifyFinalFourAction,
   exportRegistrationsCsvAction,
@@ -25,17 +23,17 @@ const MOCK_TEAMS: Team[] = [
 ];
 
 const MOCK_PITCHES: (Pitch & { teams?: Team })[] = [
-  { id: 'mock-pitch-1', team_id: 'mock-team-1', round_id: 'r1', status: 'live', pitch_order: 1, teams: MOCK_TEAMS[0] },
-  { id: 'mock-pitch-2', team_id: 'mock-team-2', round_id: 'r1', status: 'done', pitch_order: 2, teams: MOCK_TEAMS[1] },
-  { id: 'mock-pitch-3', team_id: 'mock-team-3', round_id: 'r1', status: 'upcoming', pitch_order: 3, teams: MOCK_TEAMS[2] },
-  { id: 'mock-pitch-4', team_id: 'mock-team-4', round_id: 'r1', status: 'upcoming', pitch_order: 4, teams: MOCK_TEAMS[3] },
+  { id: 'mock-pitch-1', team_id: 'mock-team-1', round_id: 'r1', status: 'live', queue_status: 'pitching', pitch_order: 1, queue_position_override: null, teams: MOCK_TEAMS[0] },
+  { id: 'mock-pitch-2', team_id: 'mock-team-2', round_id: 'r1', status: 'done', queue_status: 'scored', pitch_order: 2, queue_position_override: null, teams: MOCK_TEAMS[1] },
+  { id: 'mock-pitch-3', team_id: 'mock-team-3', round_id: 'r1', status: 'upcoming', queue_status: 'queued', pitch_order: 3, queue_position_override: null, teams: MOCK_TEAMS[2] },
+  { id: 'mock-pitch-4', team_id: 'mock-team-4', round_id: 'r1', status: 'upcoming', queue_status: 'queued', pitch_order: 4, queue_position_override: null, teams: MOCK_TEAMS[3] },
 ];
 
 const MOCK_EVENT_STATE: EventState = {
   id: 1,
   current_pitch_id: 'mock-pitch-1',
   current_round_id: 'r1',
-  timer_phase: 'pitch',
+  timer_status: 'running',
   timer_duration_seconds: 180,
   timer_started_at: new Date(Date.now() - 45000).toISOString(),
   timer_paused_remaining: null,
@@ -70,7 +68,7 @@ const MOCK_AUDIT_LOGS: ScoreAuditLog[] = [
   {
     id: 'a1',
     changed_by: 'org-1',
-    table_changed: 'judge_scores',
+    table_changed: 'pitch_scores',
     row_id: 'score-99',
     old_value: { score: 7, locked: true },
     new_value: { score: 9, locked: true },
@@ -92,8 +90,10 @@ export default function OrganiserPortalPage() {
   const [selectedOverrideEntry, setSelectedOverrideEntry] = useState<PitchLeaderboardEntry | null>(null);
   const [qualifySuccessMsg, setQualifySuccessMsg] = useState<string | null>(null);
   const [loadingAction, setLoadingAction] = useState(false);
+  const [approvedQuestions, setApprovedQuestions] = useState<Question[]>([]);
+  const [leaderboard, setLeaderboard] = useState<PitchLeaderboardEntry[]>([]);
 
-  const fetchOrganiserData = async () => {
+  const fetchOrganiserData = useCallback(async () => {
     const supabase = createClient();
 
     // Event State
@@ -123,13 +123,29 @@ export default function OrganiserPortalPage() {
       .order('created_at', { ascending: false });
     if (qData) setPendingQuestions(qData as any);
 
+    // Approved Q&A context for the currently-called pitch
+    if (es?.current_pitch_id) {
+      const { data: aqData } = await supabase
+        .from('questions')
+        .select('*, asking_team:teams(*)')
+        .eq('pitch_id', es.current_pitch_id)
+        .eq('status', 'approved');
+      if (aqData) setApprovedQuestions(aqData as any);
+    } else {
+      setApprovedQuestions([]);
+    }
+
+    // Leaderboard (for Scored info surfaced via PitchQueuePanel + Manual Override)
+    const { data: lbData } = await supabase.from('pitch_leaderboard').select('*').eq('round_name', 'prelim');
+    if (lbData) setLeaderboard(lbData as PitchLeaderboardEntry[]);
+
     // Audit Log
     const { data: auditData } = await supabase
       .from('score_audit_log')
       .select('*')
       .order('timestamp', { ascending: false });
     if (auditData) setAuditLogs(auditData as ScoreAuditLog[]);
-  };
+  }, []);
 
   useEffect(() => {
     fetchOrganiserData();
@@ -139,6 +155,7 @@ export default function OrganiserPortalPage() {
       .channel('organiser_portal_realtime')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'event_state' }, () => fetchOrganiserData())
       .on('postgres_changes', { event: '*', schema: 'public', table: 'pitches' }, () => fetchOrganiserData())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'pitch_scores' }, () => fetchOrganiserData())
       .on('postgres_changes', { event: '*', schema: 'public', table: 'questions' }, () => fetchOrganiserData())
       .on('postgres_changes', { event: '*', schema: 'public', table: 'teams' }, () => fetchOrganiserData())
       .on('postgres_changes', { event: '*', schema: 'public', table: 'score_audit_log' }, () => fetchOrganiserData())
@@ -147,19 +164,7 @@ export default function OrganiserPortalPage() {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, []);
-
-  const handleSetLivePitch = async (pitchId: string) => {
-    setLoadingAction(true);
-    await setLivePitchAction(pitchId);
-    setLoadingAction(false);
-    fetchOrganiserData();
-  };
-
-  const handleTimerChange = async (phase: any, duration?: number) => {
-    await updateTimerStateAction(phase, duration);
-    fetchOrganiserData();
-  };
+  }, [fetchOrganiserData]);
 
   const handleQuestionReview = async (
     questionId: string,
@@ -206,13 +211,6 @@ export default function OrganiserPortalPage() {
       <Navbar userRole="organiser" />
 
       <main className="flex-1 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8 w-full">
-        {/* Synced Timer with Organiser Controls */}
-        <CountdownTimer
-          initialState={eventState || undefined}
-          showControls={true}
-          onPhaseChange={handleTimerChange}
-        />
-
         {/* ORGANISER TABS HEADER */}
         <div className="glass-panel rounded-2xl p-2 border border-surface-border flex flex-wrap gap-2">
           <button
@@ -281,85 +279,34 @@ export default function OrganiserPortalPage() {
           </button>
         </div>
 
-        {/* TAB 1: LIVE CONTROL PANEL */}
+        {/* TAB 1: LIVE CONTROL PANEL — reuses the exact same PitchQueuePanel
+            component as the Judge Portal so queue/timer/scoring controls
+            can never drift out of sync between the two roles. */}
         {activeTab === 'control' && (
           <div className="space-y-8">
-            <div className="glass-card rounded-2xl p-6 border border-surface-border space-y-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <h2 className="text-xl font-bold text-white flex items-center space-x-2">
-                    <Flame className="w-5 h-5 text-brand-cyan" />
-                    <span>Live Pitch Selector</span>
-                  </h2>
-                  <p className="text-xs text-gray-400">Selecting a pitch flips every Team and Judge screen instantly in real-time.</p>
-                </div>
-
-                <button
-                  onClick={handleQualifyFinalFour}
-                  disabled={loadingAction}
-                  className="px-4 py-2.5 rounded-xl font-bold text-xs bg-gradient-to-r from-brand-gold via-amber-500 to-yellow-400 text-black shadow-gold-glow hover:scale-105 transition-all flex items-center space-x-2"
-                >
-                  <Sparkles className="w-4 h-4" />
-                  <span>Reveal Final 4 & Qualify</span>
-                </button>
-              </div>
-
-              {qualifySuccessMsg && (
-                <div className="p-4 rounded-xl bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 text-xs font-bold text-center">
-                  {qualifySuccessMsg}
-                </div>
-              )}
-
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                {pitches.map((p) => {
-                  const isLive = p.id === eventState?.current_pitch_id;
-                  const team = p.teams;
-
-                  return (
-                    <div
-                      key={p.id}
-                      className={`p-4 rounded-xl border transition-all space-y-3 ${
-                        isLive
-                          ? 'bg-brand-cyan/10 border-brand-cyan shadow-cyan-glow'
-                          : 'bg-gray-900/60 border-gray-800'
-                      }`}
-                    >
-                      <div className="flex items-center justify-between">
-                        <span className="text-xs font-bold font-mono text-gray-400">Pitch #{p.pitch_order}</span>
-                        {isLive ? (
-                          <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-red-500/20 text-red-400 border border-red-500/40 animate-pulse">
-                            LIVE NOW
-                          </span>
-                        ) : (
-                          <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-gray-800 text-gray-400 uppercase">
-                            {p.status}
-                          </span>
-                        )}
-                      </div>
-
-                      <div>
-                        <h4 className="text-base font-bold text-white">{team?.team_name || 'Unassigned'}</h4>
-                        <p className="text-xs text-gray-400">Domain: <span className="text-brand-gold">{team?.domain}</span> • Pool {team?.pool}</p>
-                      </div>
-
-                      {!isLive ? (
-                        <button
-                          onClick={() => handleSetLivePitch(p.id)}
-                          className="w-full py-2 rounded-lg font-bold text-xs bg-gray-800 hover:bg-brand-cyan hover:text-black text-gray-200 border border-gray-700 transition-all flex items-center justify-center space-x-1.5"
-                        >
-                          <Play className="w-3.5 h-3.5" />
-                          <span>Set Live Pitch</span>
-                        </button>
-                      ) : (
-                        <div className="text-center py-1 text-xs font-bold text-brand-cyan">
-                          Active on All Devices
-                        </div>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
+            <div className="flex items-center justify-end">
+              <button
+                onClick={handleQualifyFinalFour}
+                disabled={loadingAction}
+                className="px-4 py-2.5 rounded-xl font-bold text-xs bg-gradient-to-r from-brand-gold via-amber-500 to-yellow-400 text-black shadow-gold-glow hover:scale-105 transition-all flex items-center space-x-2"
+              >
+                <Sparkles className="w-4 h-4" />
+                <span>Reveal Final 4 & Qualify</span>
+              </button>
             </div>
+
+            {qualifySuccessMsg && (
+              <div className="p-4 rounded-xl bg-emerald-500/20 text-emerald-300 border border-emerald-500/40 text-xs font-bold text-center">
+                {qualifySuccessMsg}
+              </div>
+            )}
+
+            <PitchQueuePanel
+              eventState={eventState}
+              pitches={pitches}
+              approvedQuestions={approvedQuestions}
+              onDataChange={fetchOrganiserData}
+            />
           </div>
         )}
 

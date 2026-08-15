@@ -48,108 +48,6 @@ export async function exportRegistrationsCsvAction() {
   return { success: true, csv };
 }
 
-export async function setLivePitchAction(pitchId: string | null) {
-  try {
-    await requireRole('organiser');
-  } catch (err: any) {
-    return { error: err.message || 'Unauthorized action.' };
-  }
-
-  const sanitizedPitchId = pitchId ? sanitizeInput(pitchId) : null;
-  const adminSupabase = createAdminClient();
-
-  // If a pitch is currently live, set its status to done
-  const { data: currentState } = await adminSupabase
-    .from('event_state')
-    .select('current_pitch_id')
-    .eq('id', 1)
-    .single();
-
-  if (currentState?.current_pitch_id && currentState.current_pitch_id !== sanitizedPitchId) {
-    await adminSupabase
-      .from('pitches')
-      .update({ status: 'done', ended_at: new Date().toISOString() })
-      .eq('id', currentState.current_pitch_id);
-  }
-
-  if (sanitizedPitchId) {
-    // Set target pitch status to live
-    await adminSupabase
-      .from('pitches')
-      .update({ status: 'live', started_at: new Date().toISOString() })
-      .eq('id', sanitizedPitchId);
-  }
-
-  // Update single row event_state
-  const { error } = await adminSupabase
-    .from('event_state')
-    .update({
-      current_pitch_id: sanitizedPitchId,
-      updated_at: new Date().toISOString(),
-    })
-    .eq('id', 1);
-
-  if (error) return { error: error.message };
-
-  revalidatePath('/portal/organiser');
-  revalidatePath('/portal/judge');
-  revalidatePath('/portal/team');
-  return { success: true };
-}
-
-export async function updateTimerStateAction(
-  phase: 'idle' | 'prep' | 'pitch' | 'qa' | 'paused',
-  durationSeconds?: number
-) {
-  try {
-    await requireRole('organiser');
-  } catch (err: any) {
-    return { error: err.message || 'Unauthorized action.' };
-  }
-
-  const validPhases = ['idle', 'prep', 'pitch', 'qa', 'paused'];
-  if (!validPhases.includes(phase)) {
-    return { error: 'Invalid timer phase.' };
-  }
-
-  const adminSupabase = createAdminClient();
-
-  const updatePayload: any = {
-    timer_phase: phase,
-    updated_at: new Date().toISOString(),
-  };
-
-  if (phase === 'paused') {
-    const { data: curr } = await adminSupabase
-      .from('event_state')
-      .select('timer_started_at, timer_duration_seconds')
-      .eq('id', 1)
-      .single();
-
-    if (curr?.timer_started_at) {
-      const elapsed = Math.floor((Date.now() - new Date(curr.timer_started_at).getTime()) / 1000);
-      const remaining = Math.max(0, (curr.timer_duration_seconds || 0) - elapsed);
-      updatePayload.timer_paused_remaining = remaining;
-    }
-  } else if (phase === 'idle') {
-    updatePayload.timer_started_at = null;
-    updatePayload.timer_paused_remaining = null;
-  } else {
-    updatePayload.timer_duration_seconds = Math.max(10, Math.min(durationSeconds ?? 600, 3600));
-    updatePayload.timer_started_at = new Date().toISOString();
-    updatePayload.timer_paused_remaining = null;
-  }
-
-  const { error } = await adminSupabase
-    .from('event_state')
-    .update(updatePayload)
-    .eq('id', 1);
-
-  if (error) return { error: error.message };
-
-  return { success: true };
-}
-
 export async function reviewQuestionAction(
   questionId: string,
   status: 'approved' | 'rejected',
@@ -198,7 +96,7 @@ export async function reviewQuestionAction(
 }
 
 export async function manualOverrideScoreAction(payload: {
-  tableChanged: 'judge_scores' | 'audience_scores' | 'questions';
+  tableChanged: 'pitch_scores' | 'audience_scores' | 'questions';
   rowId: string;
   oldValue: any;
   newValue: any;
@@ -215,7 +113,7 @@ export async function manualOverrideScoreAction(payload: {
   const sanitizedNote = sanitizeInput(note || '');
   const sanitizedRowId = sanitizeInput(rowId || '');
 
-  if (!['judge_scores', 'audience_scores', 'questions'].includes(tableChanged)) {
+  if (!['pitch_scores', 'audience_scores', 'questions'].includes(tableChanged)) {
     return { error: 'Invalid target table for score override.' };
   }
 
@@ -226,11 +124,21 @@ export async function manualOverrideScoreAction(payload: {
   const adminSupabase = createAdminClient();
 
   // 1. Apply modification to target table
-  if (tableChanged === 'judge_scores') {
-    const numScore = Math.max(1, Math.min(Number(newValue.score) || 1, 10));
+  if (tableChanged === 'pitch_scores') {
+    const category = String(newValue.category || '');
+    const categoryMax: Record<string, number> = {
+      problem_market_score: 20,
+      solution_innovation_score: 20,
+      feasibility_score: 15,
+      pitch_storytelling_score: 15,
+    };
+    if (!(category in categoryMax)) {
+      return { error: 'Invalid pitch_scores category for override.' };
+    }
+    const numScore = Math.max(0, Math.min(Number(newValue.score) || 0, categoryMax[category]));
     await adminSupabase
-      .from('judge_scores')
-      .update({ score: numScore, locked: newValue.locked ?? true })
+      .from('pitch_scores')
+      .update({ [category]: numScore })
       .eq('id', sanitizedRowId);
   } else if (tableChanged === 'audience_scores') {
     const numScore = Math.max(1, Math.min(Number(newValue.score) || 1, 5));
@@ -264,7 +172,11 @@ export async function manualOverrideScoreAction(payload: {
   return { success: true };
 }
 
-export async function unlockJudgeScoreAction(judgeScoreId: string, note: string) {
+/**
+ * Unlocks a pitch's single authoritative score row so a correction can be
+ * made via the Manual Override form. Organiser-only, audit-logged.
+ */
+export async function unlockPitchScoreAction(pitchScoreId: string, note: string) {
   let userCtx;
   try {
     userCtx = await requireRole('organiser');
@@ -272,36 +184,33 @@ export async function unlockJudgeScoreAction(judgeScoreId: string, note: string)
     return { error: err.message || 'Unauthorized action.' };
   }
 
-  const sanitizedId = sanitizeInput(judgeScoreId);
+  const sanitizedId = sanitizeInput(pitchScoreId);
   const sanitizedNote = sanitizeInput(note || '');
 
   if (!sanitizedNote || sanitizedNote.trim().length < 3) {
-    return { error: 'Please provide a note explaining why this judge score is being unlocked.' };
+    return { error: 'Please provide a note explaining why this score is being unlocked.' };
   }
 
   const adminSupabase = createAdminClient();
 
-  // Fetch existing score
   const { data: oldRow } = await adminSupabase
-    .from('judge_scores')
+    .from('pitch_scores')
     .select('*')
     .eq('id', sanitizedId)
     .single();
 
-  if (!oldRow) return { error: 'Judge score not found.' };
+  if (!oldRow) return { error: 'Pitch score not found.' };
 
-  // Unlock row
   const { error } = await adminSupabase
-    .from('judge_scores')
+    .from('pitch_scores')
     .update({ locked: false })
     .eq('id', sanitizedId);
 
   if (error) return { error: error.message };
 
-  // Write to audit log
   await adminSupabase.from('score_audit_log').insert({
     changed_by: userCtx.user.id,
-    table_changed: 'judge_scores',
+    table_changed: 'pitch_scores',
     row_id: sanitizedId,
     old_value: { locked: oldRow.locked },
     new_value: { locked: false },

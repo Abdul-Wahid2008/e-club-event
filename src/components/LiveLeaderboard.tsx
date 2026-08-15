@@ -22,6 +22,9 @@ const MOCK_LEADERBOARD: PitchLeaderboardEntry[] = [
     round_id: 'mock-round-1',
     round_name: 'prelim',
     pitch_status: 'live',
+    queue_status: 'pitching',
+    pitch_order: 1,
+    queue_position_override: null,
     problem_market_score: 90,
     solution_innovation_score: 85,
     feasibility_score: 85,
@@ -29,6 +32,7 @@ const MOCK_LEADERBOARD: PitchLeaderboardEntry[] = [
     audience_rating_score: 88,
     qa_pressure_score: 80,
     judges_submitted_count: 5,
+    submitted_by_name: 'Judge Dr. Sharma',
     total_voters: 12,
     total_qa_points: 3,
     total_weighted_score: 86.85,
@@ -42,13 +46,17 @@ const MOCK_LEADERBOARD: PitchLeaderboardEntry[] = [
     round_id: 'mock-round-1',
     round_name: 'prelim',
     pitch_status: 'done',
+    queue_status: 'scored',
+    pitch_order: 2,
+    queue_position_override: null,
     problem_market_score: 80,
     solution_innovation_score: 85,
     feasibility_score: 80,
     pitch_storytelling_score: 85,
     audience_rating_score: 84,
     qa_pressure_score: 70,
-    judges_submitted_count: 6,
+    judges_submitted_count: 1,
+    submitted_by_name: 'Judge Dr. Rao',
     total_voters: 10,
     total_qa_points: 2,
     total_weighted_score: 81.55,
@@ -62,13 +70,17 @@ const MOCK_LEADERBOARD: PitchLeaderboardEntry[] = [
     round_id: 'mock-round-1',
     round_name: 'prelim',
     pitch_status: 'upcoming',
+    queue_status: 'queued',
+    pitch_order: 3,
+    queue_position_override: null,
     problem_market_score: 75,
     solution_innovation_score: 80,
     feasibility_score: 80,
     pitch_storytelling_score: 75,
     audience_rating_score: 78,
     qa_pressure_score: 60,
-    judges_submitted_count: 4,
+    judges_submitted_count: 0,
+    submitted_by_name: null,
     total_voters: 8,
     total_qa_points: 1,
     total_weighted_score: 75.85,
@@ -82,13 +94,17 @@ const MOCK_LEADERBOARD: PitchLeaderboardEntry[] = [
     round_id: 'mock-round-1',
     round_name: 'prelim',
     pitch_status: 'upcoming',
+    queue_status: 'queued',
+    pitch_order: 4,
+    queue_position_override: null,
     problem_market_score: 70,
     solution_innovation_score: 75,
     feasibility_score: 70,
     pitch_storytelling_score: 75,
     audience_rating_score: 72,
     qa_pressure_score: 50,
-    judges_submitted_count: 3,
+    judges_submitted_count: 0,
+    submitted_by_name: null,
     total_voters: 6,
     total_qa_points: 0,
     total_weighted_score: 70.15,
@@ -127,7 +143,7 @@ export default function LiveLeaderboard({
     // Realtime subscriptions across all relevant tables
     const channel = supabase
       .channel('leaderboard_realtime')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'judge_scores' }, () => fetchLeaderboard())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'pitch_scores' }, () => fetchLeaderboard())
       .on('postgres_changes', { event: '*', schema: 'public', table: 'audience_scores' }, () => fetchLeaderboard())
       .on('postgres_changes', { event: '*', schema: 'public', table: 'questions' }, () => fetchLeaderboard())
       .on('postgres_changes', { event: '*', schema: 'public', table: 'pitches' }, () => fetchLeaderboard())
@@ -243,7 +259,7 @@ export default function LiveLeaderboard({
                         {item.total_weighted_score.toFixed(1)} <span className="text-xs font-normal text-gray-400">pts</span>
                       </div>
                       <div className="text-[10px] text-gray-400 font-mono">
-                        {item.judges_submitted_count} Judges • {item.total_voters} Voters
+                        {item.judges_submitted_count > 0 ? `Scored by ${item.submitted_by_name}` : 'Not scored yet'} • {item.total_voters} Voters
                       </div>
                     </div>
 

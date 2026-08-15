@@ -1,82 +1,8 @@
 'use server';
 
-import { createAdminClient } from '@/src/lib/supabase/admin';
-import { requireRole } from '@/src/lib/authHelpers';
-import { sanitizeInput } from '@/src/lib/validation';
-import { revalidatePath } from 'next/cache';
-
-export async function submitJudgeScoresAction(payload: {
-  pitchId: string;
-  scores: {
-    problem_market: number;
-    solution_innovation: number;
-    feasibility: number;
-    pitch_storytelling: number;
-  };
-}) {
-  let userCtx;
-  try {
-    userCtx = await requireRole(['judge', 'organiser']);
-  } catch (err: any) {
-    return { error: err.message || 'Not authenticated as a judge.' };
-  }
-
-  const { pitchId, scores } = payload;
-  const sanitizedPitchId = sanitizeInput(pitchId);
-  const adminSupabase = createAdminClient();
-
-  // Find judge ID associated with authenticated user
-  const { data: judge } = await adminSupabase
-    .from('judges')
-    .select('id')
-    .eq('auth_user_id', userCtx.user.id)
-    .single();
-
-  if (!judge) {
-    return { error: 'Judge profile not found for this account.' };
-  }
-
-  // Explicit lock check: submitJudgeScoresAction uses the admin client, which
-  // bypasses RLS entirely, so the DB-level "no update when locked" policy
-  // does not protect against this server action being called again after
-  // submission. Enforce it here instead.
-  const { data: existingScores } = await adminSupabase
-    .from('judge_scores')
-    .select('locked')
-    .eq('judge_id', judge.id)
-    .eq('pitch_id', sanitizedPitchId);
-
-  if (existingScores && existingScores.some((s) => s.locked)) {
-    return { error: 'Scores for this pitch are already submitted and locked. Ask the organiser to unlock if a correction is needed.' };
-  }
-
-  const scoreEntries = [
-    { criterion: 'problem_market', score: Math.max(1, Math.min(Number(scores.problem_market) || 1, 10)) },
-    { criterion: 'solution_innovation', score: Math.max(1, Math.min(Number(scores.solution_innovation) || 1, 10)) },
-    { criterion: 'feasibility', score: Math.max(1, Math.min(Number(scores.feasibility) || 1, 10)) },
-    { criterion: 'pitch_storytelling', score: Math.max(1, Math.min(Number(scores.pitch_storytelling) || 1, 10)) },
-  ];
-
-  for (const entry of scoreEntries) {
-    const { error: scoreErr } = await adminSupabase
-      .from('judge_scores')
-      .upsert(
-        {
-          judge_id: judge.id,
-          pitch_id: sanitizedPitchId,
-          criterion: entry.criterion as any,
-          score: entry.score,
-          locked: true, // Submit locks the score!
-        },
-        { onConflict: 'judge_id,pitch_id,criterion' }
-      );
-
-    if (scoreErr) {
-      return { error: 'Failed to submit score: ' + scoreErr.message };
-    }
-  }
-
-  revalidatePath('/portal/judge');
-  revalidatePath('/portal/organiser');
-  return { success: true };
-}
+// Judge score submission now lives in pitchQueueActions.ts
+// (submitPitchScoreAction) since scoring, queue, and timer control share
+// the same single-score-per-pitch model and are used by both Judge and
+// Organiser portals. This file is kept as a re-export for callers that
+// still import from '@/src/app/actions/judgeActions'.
+export { submitPitchScoreAction } from './pitchQueueActions';
