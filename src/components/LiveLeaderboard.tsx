@@ -16,98 +16,15 @@ interface LiveLeaderboardProps {
   showOverrideButton?: boolean;
 }
 
-const MOCK_LEADERBOARD: PitchLeaderboardEntry[] = [
-  {
-    team_id: 'mock-team-1',
-    team_name: 'MedPulse AI',
-    domain: 'Healthcare',
-    pool: 'A',
-    pitch_id: 'mock-pitch-1',
-    round_id: 'mock-round-1',
-    round_name: 'prelim',
-    pitch_status: 'live',
-    problem_market_score: 90,
-    solution_innovation_score: 85,
-    feasibility_score: 85,
-    pitch_storytelling_score: 90,
-    audience_rating_score: 88,
-    qa_pressure_score: 80,
-    judges_submitted_count: 5,
-    total_voters: 12,
-    total_qa_points: 3,
-    total_weighted_score: 86.85,
-  },
-  {
-    team_id: 'mock-team-2',
-    team_name: 'EcoDrive Mobility',
-    domain: 'Mobility',
-    pool: 'B',
-    pitch_id: 'mock-pitch-2',
-    round_id: 'mock-round-1',
-    round_name: 'prelim',
-    pitch_status: 'done',
-    problem_market_score: 80,
-    solution_innovation_score: 85,
-    feasibility_score: 80,
-    pitch_storytelling_score: 85,
-    audience_rating_score: 84,
-    qa_pressure_score: 70,
-    judges_submitted_count: 6,
-    total_voters: 10,
-    total_qa_points: 2,
-    total_weighted_score: 81.55,
-  },
-  {
-    team_id: 'mock-team-3',
-    team_name: 'FinFlex Pay',
-    domain: 'FinTech',
-    pool: 'A',
-    pitch_id: 'mock-pitch-3',
-    round_id: 'mock-round-1',
-    round_name: 'prelim',
-    pitch_status: 'upcoming',
-    problem_market_score: 75,
-    solution_innovation_score: 80,
-    feasibility_score: 80,
-    pitch_storytelling_score: 75,
-    audience_rating_score: 78,
-    qa_pressure_score: 60,
-    judges_submitted_count: 4,
-    total_voters: 8,
-    total_qa_points: 1,
-    total_weighted_score: 75.85,
-  },
-  {
-    team_id: 'mock-team-4',
-    team_name: 'AgriGrow Tech',
-    domain: 'Agriculture',
-    pool: 'B',
-    pitch_id: 'mock-pitch-4',
-    round_id: 'mock-round-1',
-    round_name: 'prelim',
-    pitch_status: 'upcoming',
-    problem_market_score: 70,
-    solution_innovation_score: 75,
-    feasibility_score: 70,
-    pitch_storytelling_score: 75,
-    audience_rating_score: 72,
-    qa_pressure_score: 50,
-    judges_submitted_count: 3,
-    total_voters: 6,
-    total_qa_points: 0,
-    total_weighted_score: 70.15,
-  },
-];
-
 export default function LiveLeaderboard({
   roundName = 'prelim',
   onOverrideClick,
   showOverrideButton = false,
 }: LiveLeaderboardProps) {
   const reduced = usePrefersReducedMotion();
-  const [leaderboard, setLeaderboard] = useState<PitchLeaderboardEntry[]>(MOCK_LEADERBOARD);
-  const [expandedTeamId, setExpandedTeamId] = useState<string | null>('mock-team-1');
-  const [loading, setLoading] = useState(false);
+  const [leaderboard, setLeaderboard] = useState<PitchLeaderboardEntry[]>([]);
+  const [expandedTeamId, setExpandedTeamId] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
 
   const fetchLeaderboard = useCallback(async () => {
     try {
@@ -117,11 +34,13 @@ export default function LiveLeaderboard({
         .select('*')
         .eq('round_name', roundName);
 
-      if (!error && data && data.length > 0) {
+      if (!error && data) {
         setLeaderboard(data as PitchLeaderboardEntry[]);
       }
     } catch (e) {
-      // Keep mock fallback on error
+      // Leave leaderboard as-is on transient error
+    } finally {
+      setLoading(false);
     }
   }, [roundName]);
 
@@ -132,7 +51,7 @@ export default function LiveLeaderboard({
     // Realtime subscriptions across all relevant tables
     const channel = supabase
       .channel('leaderboard_realtime')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'judge_scores' }, () => fetchLeaderboard())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'pitch_scores' }, () => fetchLeaderboard())
       .on('postgres_changes', { event: '*', schema: 'public', table: 'audience_scores' }, () => fetchLeaderboard())
       .on('postgres_changes', { event: '*', schema: 'public', table: 'questions' }, () => fetchLeaderboard())
       .on('postgres_changes', { event: '*', schema: 'public', table: 'pitches' }, () => fetchLeaderboard())
@@ -189,9 +108,12 @@ export default function LiveLeaderboard({
 
       <div className="space-y-3">
         <AnimatePresence>
-          {leaderboard.map((item, index) => {
-            const rank = index + 1;
-            const isTop3 = rank <= 3;
+          {(() => {
+            let scoredSeen = 0;
+            return leaderboard.map((item) => {
+            const isScored = item.total_weighted_score !== null;
+            const rank = isScored ? ++scoredSeen : null;
+            const isTop3 = rank !== null && rank <= 3;
             const isExpanded = expandedTeamId === item.team_id;
 
             let rankColor = 'bg-white/5 text-text-secondary border-panel-border';
@@ -220,7 +142,7 @@ export default function LiveLeaderboard({
                   <div className="flex items-center space-x-3 min-w-0">
                     {/* Rank Badge */}
                     <div className={`w-8 h-8 sm:w-9 sm:h-9 rounded-lg flex items-center justify-center font-black text-sm border shrink-0 ${rankColor}`}>
-                      {rank === 1 ? <Sparkles className="w-4 h-4" /> : `#${rank}`}
+                      {rank === null ? '—' : rank === 1 ? <Sparkles className="w-4 h-4" /> : `#${rank}`}
                     </div>
 
                     {/* Team Info */}
@@ -244,10 +166,12 @@ export default function LiveLeaderboard({
                   <div className="flex items-center space-x-3 shrink-0">
                     <div className="text-right">
                       <div className="text-base sm:text-xl font-extrabold text-brand-500 tracking-tight">
-                        <AnimatedNumber value={item.total_weighted_score} decimals={1} /> <span className="text-xs font-normal text-text-secondary">pts</span>
+                        {item.total_weighted_score !== null
+                          ? <><AnimatedNumber value={item.total_weighted_score} decimals={1} /> <span className="text-xs font-normal text-text-secondary">pts</span></>
+                          : <span className="text-text-secondary text-sm font-semibold">Awaiting score</span>}
                       </div>
                       <div className="text-[10px] text-text-secondary font-mono">
-                        {item.judges_submitted_count} Judges • {item.total_voters} Voters
+                        {item.judges_submitted_count > 0 ? `Scored by ${item.submitted_by_name}` : 'Not scored yet'} • {item.total_voters} Voters
                       </div>
                     </div>
 
@@ -314,7 +238,8 @@ export default function LiveLeaderboard({
                 </AnimatePresence>
               </motion.div>
             );
-          })}
+            });
+          })()}
         </AnimatePresence>
       </div>
     </div>

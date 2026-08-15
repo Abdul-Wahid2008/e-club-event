@@ -20,7 +20,7 @@ const HeroShard = dynamic(() => import('@/src/components/HeroShard'), { ssr: fal
  * Public, read-only broadcast view for the projector/big-screen.
  *
  * Subscribes to the exact same tables the Organiser console already listens
- * to (event_state, pitches, questions, judge_scores/audience_scores via the
+ * to (event_state, pitches, questions, pitch_scores/audience_scores via the
  * pitch_leaderboard view) — no schema/RLS changes, no new tables, no admin
  * controls rendered here. Requires no login.
  */
@@ -88,7 +88,9 @@ export default function DisplayPage() {
       .eq('round_name', 'prelim');
     if (lbData) {
       setLeaderboard(
-        (lbData as PitchLeaderboardEntry[]).slice().sort((a, b) => b.total_weighted_score - a.total_weighted_score)
+        (lbData as PitchLeaderboardEntry[])
+          .slice()
+          .sort((a, b) => (b.total_weighted_score ?? -1) - (a.total_weighted_score ?? -1))
       );
     }
   }, []);
@@ -102,7 +104,7 @@ export default function DisplayPage() {
       .on('postgres_changes', { event: '*', schema: 'public', table: 'event_state' }, () => fetchAll())
       .on('postgres_changes', { event: '*', schema: 'public', table: 'pitches' }, () => fetchAll())
       .on('postgres_changes', { event: '*', schema: 'public', table: 'questions' }, () => fetchAll())
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'judge_scores' }, () => fetchAll())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'pitch_scores' }, () => fetchAll())
       .on('postgres_changes', { event: '*', schema: 'public', table: 'audience_scores' }, () => fetchAll())
       .subscribe((status: string) => {
         if (status === 'SUBSCRIBED') setConnState('connected');
@@ -130,13 +132,13 @@ export default function DisplayPage() {
   // Timer ticker (mirrors CountdownTimer's calculation, read-only)
   useEffect(() => {
     if (!eventState) return;
-    const { timer_phase, timer_started_at, timer_duration_seconds, timer_paused_remaining } = eventState;
+    const { timer_status, timer_started_at, timer_duration_seconds, timer_paused_remaining } = eventState;
 
-    if (timer_phase === 'idle') {
-      setSecondsLeft(timer_duration_seconds || 0);
+    if (timer_status === 'idle' || timer_status === 'ended') {
+      setSecondsLeft(timer_duration_seconds || 180);
       return;
     }
-    if (timer_phase === 'paused') {
+    if (timer_status === 'paused') {
       setSecondsLeft(timer_paused_remaining ?? 0);
       return;
     }
@@ -157,7 +159,7 @@ export default function DisplayPage() {
   }, [eventState]);
 
   const pitchingTeam = currentPitch?.teams;
-  const isLowTime = secondsLeft <= 30 && eventState?.timer_phase !== 'idle' && eventState?.timer_phase !== 'paused';
+  const isLowTime = secondsLeft <= 30 && eventState?.timer_status === 'running';
   const latestQuestion = approvedQuestions[0];
   const teamRegisterUrl = siteUrl ? `${siteUrl}/auth/team` : '';
 
@@ -208,7 +210,7 @@ export default function DisplayPage() {
                     </div>
                     <div className="flex items-center justify-center gap-2">
                       <PoolBadge pool={t.pool} className="text-sm px-3 py-1" />
-                      <span className="tabular-nums text-sm text-text-secondary">{t.total_weighted_score.toFixed(1)} pts</span>
+                      <span className="tabular-nums text-sm text-text-secondary">{(t.total_weighted_score ?? 0).toFixed(1)} pts</span>
                     </div>
                   </motion.div>
                 ))}
@@ -242,9 +244,9 @@ export default function DisplayPage() {
                 {formatClock(secondsLeft)}
               </div>
 
-              {/* Approved Q&A banner during Q&A phase */}
+              {/* Approved Q&A banner for the currently called/pitching team */}
               <AnimatePresence>
-                {eventState?.timer_phase === 'qa' && latestQuestion && (
+                {latestQuestion && (
                   <motion.div
                     initial={reducedMotion ? undefined : { opacity: 0, y: 12 }}
                     animate={{ opacity: 1, y: 0 }}
@@ -286,26 +288,33 @@ export default function DisplayPage() {
           )}
         </AnimatePresence>
 
-        {/* Live leaderboard ticker — CSS marquee, no new dependency, paused under reduced-motion */}
-        {!finalFourRevealed && leaderboard.length > 0 && (
+        {/* Live leaderboard ticker — CSS marquee, no new dependency, paused under reduced-motion.
+            Only scored pitches appear here (an unscored pitch has no real
+            score to show, not a 0 or a placeholder rank). */}
+        {!finalFourRevealed && leaderboard.some((e) => e.total_weighted_score !== null) && (
           <div className="w-full max-w-6xl overflow-hidden border-t border-b border-panel-border py-3">
             <div className="flex items-center gap-2 mb-2 text-xs font-semibold text-text-secondary uppercase tracking-wider">
               <Trophy className="w-3.5 h-3.5 text-accent-warm" />
               Live Leaderboard
             </div>
             <div className="overflow-hidden">
-              <div className={`flex gap-6 w-max ${reducedMotion ? '' : 'marquee-track'}`}>
-                {[...leaderboard, ...leaderboard].map((entry, i) => (
-                  <div key={`${entry.team_id}-${i}`} className="flex items-center gap-2 shrink-0 px-4 py-2 rounded-xl card">
-                    <span className="tabular-nums text-sm font-semibold text-text-primary">#{leaderboard.findIndex((e) => e.team_id === entry.team_id) + 1}</span>
-                    <span className="text-sm font-semibold text-text-primary">{entry.team_name}</span>
-                    <PoolBadge pool={entry.pool} />
-                    <span className="tabular-nums text-sm font-semibold text-brand-500">
-                      <AnimatedNumber value={entry.total_weighted_score} decimals={1} />
-                    </span>
+              {(() => {
+                const scoredOnly = leaderboard.filter((e) => e.total_weighted_score !== null);
+                return (
+                  <div className={`flex gap-6 w-max ${reducedMotion ? '' : 'marquee-track'}`}>
+                    {[...scoredOnly, ...scoredOnly].map((entry, i) => (
+                      <div key={`${entry.team_id}-${i}`} className="flex items-center gap-2 shrink-0 px-4 py-2 rounded-xl card">
+                        <span className="tabular-nums text-sm font-semibold text-text-primary">#{scoredOnly.findIndex((e) => e.team_id === entry.team_id) + 1}</span>
+                        <span className="text-sm font-semibold text-text-primary">{entry.team_name}</span>
+                        <PoolBadge pool={entry.pool} />
+                        <span className="tabular-nums text-sm font-semibold text-brand-500">
+                          <AnimatedNumber value={entry.total_weighted_score as number} decimals={1} />
+                        </span>
+                      </div>
+                    ))}
                   </div>
-                ))}
-              </div>
+                );
+              })()}
             </div>
           </div>
         )}

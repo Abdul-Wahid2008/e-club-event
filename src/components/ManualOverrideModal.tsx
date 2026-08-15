@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { X, ShieldAlert } from 'lucide-react';
 import { PitchLeaderboardEntry } from '@/src/lib/types';
-import { manualOverrideScoreAction, unlockJudgeScoreAction } from '@/src/app/actions/organiserActions';
+import { manualOverrideScoreAction, unlockPitchScoreAction } from '@/src/app/actions/organiserActions';
 import Toast, { ToastMessage } from '@/src/components/Toast';
 
 interface ManualOverrideModalProps {
@@ -13,7 +13,8 @@ interface ManualOverrideModalProps {
 
 export default function ManualOverrideModal({ entry, onClose }: ManualOverrideModalProps) {
   const [activeTab, setActiveTab] = useState<'override' | 'unlock'>('override');
-  const [tableChanged, setTableChanged] = useState<'judge_scores' | 'audience_scores' | 'questions'>('judge_scores');
+  const [tableChanged, setTableChanged] = useState<'pitch_scores' | 'audience_scores' | 'questions'>('pitch_scores');
+  const [category, setCategory] = useState<'problem_market_score' | 'solution_innovation_score' | 'feasibility_score' | 'pitch_storytelling_score'>('problem_market_score');
   const [rowId, setRowId] = useState('');
   const [newValue, setNewValue] = useState('');
   const [note, setNote] = useState('');
@@ -32,7 +33,7 @@ export default function ManualOverrideModal({ entry, onClose }: ManualOverrideMo
       tableChanged,
       rowId,
       oldValue: null,
-      newValue: { score: Number(newValue) },
+      newValue: tableChanged === 'pitch_scores' ? { category, score: Number(newValue) } : { score: Number(newValue) },
       note,
     });
 
@@ -50,13 +51,13 @@ export default function ManualOverrideModal({ entry, onClose }: ManualOverrideMo
     setLoading(true);
     setMessage(null);
 
-    const res = await unlockJudgeScoreAction(unlockScoreId, unlockNote);
+    const res = await unlockPitchScoreAction(unlockScoreId, unlockNote);
 
     setLoading(false);
     if (res.error) {
       setMessage({ type: 'error', text: res.error });
     } else {
-      setMessage({ type: 'success', text: 'Judge score unlocked successfully!' });
+      setMessage({ type: 'success', text: 'Pitch score unlocked successfully!' });
       setTimeout(() => onClose(), 1500);
     }
   };
@@ -101,7 +102,7 @@ export default function ManualOverrideModal({ entry, onClose }: ManualOverrideMo
                 : 'border-transparent text-text-secondary hover:text-text-primary'
             }`}
           >
-            Unlock Judge Score
+            Unlock Pitch Score
           </button>
         </div>
 
@@ -118,11 +119,27 @@ export default function ManualOverrideModal({ entry, onClose }: ManualOverrideMo
                 onChange={(e: any) => setTableChanged(e.target.value)}
                 className="w-full bg-white/5 border border-panel-border rounded-lg px-3 py-2 text-xs text-text-primary focus:outline-none focus:border-brand-500"
               >
-                <option value="judge_scores">judge_scores</option>
+                <option value="pitch_scores">pitch_scores</option>
                 <option value="audience_scores">audience_scores</option>
                 <option value="questions">questions</option>
               </select>
             </div>
+
+            {tableChanged === 'pitch_scores' && (
+              <div>
+                <label className="block text-xs font-medium text-text-secondary mb-1">Category</label>
+                <select
+                  value={category}
+                  onChange={(e: any) => setCategory(e.target.value)}
+                  className="w-full bg-white/5 border border-panel-border rounded-lg px-3 py-2 text-xs text-text-primary focus:outline-none focus:border-brand-500"
+                >
+                  <option value="problem_market_score">Problem & Market (/20)</option>
+                  <option value="solution_innovation_score">Solution & Innovation (/20)</option>
+                  <option value="feasibility_score">Feasibility & Business (/15)</option>
+                  <option value="pitch_storytelling_score">Pitch & Storytelling (/15)</option>
+                </select>
+              </div>
+            )}
 
             <div>
               <label className="block text-xs font-medium text-text-secondary mb-1">Target Row UUID</label>
@@ -171,11 +188,11 @@ export default function ManualOverrideModal({ entry, onClose }: ManualOverrideMo
         ) : (
           <form onSubmit={handleUnlockSubmit} className="space-y-4">
             <div>
-              <label className="block text-xs font-medium text-text-secondary mb-1">Judge Score ID to Unlock</label>
+              <label className="block text-xs font-medium text-text-secondary mb-1">Pitch Score ID to Unlock</label>
               <input
                 type="text"
                 required
-                placeholder="Enter Judge Score UUID"
+                placeholder="Enter pitch_scores row UUID"
                 value={unlockScoreId}
                 onChange={(e) => setUnlockScoreId(e.target.value)}
                 className="w-full bg-white/5 border border-panel-border rounded-lg px-3 py-2 text-xs text-text-primary focus:outline-none focus:border-brand-500"
@@ -187,7 +204,7 @@ export default function ManualOverrideModal({ entry, onClose }: ManualOverrideMo
               <textarea
                 required
                 rows={2}
-                placeholder="Explain why judge score is being unlocked..."
+                placeholder="Explain why this pitch score is being unlocked..."
                 value={unlockNote}
                 onChange={(e) => setUnlockNote(e.target.value)}
                 className="w-full bg-white/5 border border-panel-border rounded-lg px-3 py-2 text-xs text-text-primary focus:outline-none focus:border-brand-500"
@@ -199,7 +216,7 @@ export default function ManualOverrideModal({ entry, onClose }: ManualOverrideMo
               disabled={loading}
               className="w-full py-2.5 rounded-lg bg-brand-500 hover:bg-brand-500/90 text-white font-bold text-xs transition-colors shadow-brand-glow"
             >
-              {loading ? 'Unlocking...' : 'Unlock Judge Score'}
+              {loading ? 'Unlocking...' : 'Unlock Pitch Score'}
             </button>
           </form>
         )}

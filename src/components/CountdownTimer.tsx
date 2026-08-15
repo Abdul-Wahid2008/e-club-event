@@ -1,29 +1,38 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { Clock, Pause } from 'lucide-react';
+import { Clock, Play, Pause, RotateCcw, Square } from 'lucide-react';
 import { createClient } from '@/src/lib/supabase/client';
-import { EventState, TimerPhase } from '@/src/lib/types';
+import { EventState, TimerStatus } from '@/src/lib/types';
 
 interface CountdownTimerProps {
   initialState?: EventState | null;
   showControls?: boolean;
-  onPhaseChange?: (phase: TimerPhase, durationSeconds?: number) => void;
+  onStart?: () => void;
+  onPause?: () => void;
+  onReset?: () => void;
+  onEnd?: () => void;
 }
 
 export default function CountdownTimer({
   initialState,
   showControls = false,
-  onPhaseChange,
+  onStart,
+  onPause,
+  onReset,
+  onEnd,
 }: CountdownTimerProps) {
   const [eventState, setEventState] = useState<EventState | null>(initialState || null);
   const [secondsLeft, setSecondsLeft] = useState<number>(0);
+
+  useEffect(() => {
+    setEventState(initialState || null);
+  }, [initialState]);
 
   // Subscribe to Supabase Realtime on `event_state`
   useEffect(() => {
     const supabase = createClient();
 
-    // Initial fetch if missing
     if (!initialState) {
       supabase
         .from('event_state')
@@ -51,18 +60,20 @@ export default function CountdownTimer({
     };
   }, [initialState]);
 
-  // Compute countdown ticker
+  // Compute countdown ticker. timer_status defaults to 'idle' and only
+  // ever becomes 'running' via an explicit Start Timer action elsewhere —
+  // this component never starts the timer on its own.
   useEffect(() => {
     if (!eventState) return;
 
-    const { timer_phase, timer_started_at, timer_duration_seconds, timer_paused_remaining } = eventState;
+    const { timer_status, timer_started_at, timer_duration_seconds, timer_paused_remaining } = eventState;
 
-    if (timer_phase === 'idle') {
-      setSecondsLeft(timer_duration_seconds || 600);
+    if (timer_status === 'idle' || timer_status === 'ended') {
+      setSecondsLeft(timer_duration_seconds || 180);
       return;
     }
 
-    if (timer_phase === 'paused') {
+    if (timer_status === 'paused') {
       setSecondsLeft(timer_paused_remaining ?? 0);
       return;
     }
@@ -71,8 +82,7 @@ export default function CountdownTimer({
       if (!timer_started_at) return timer_duration_seconds;
       const startTime = new Date(timer_started_at).getTime();
       const elapsed = Math.floor((Date.now() - startTime) / 1000);
-      const remaining = Math.max(0, timer_duration_seconds - elapsed);
-      return remaining;
+      return Math.max(0, timer_duration_seconds - elapsed);
     };
 
     setSecondsLeft(calculateRemaining());
@@ -94,22 +104,20 @@ export default function CountdownTimer({
     return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
   };
 
-  const getPhaseBadge = (phase?: TimerPhase) => {
-    switch (phase) {
-      case 'prep':
-        return <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-accent-warm/15 text-accent-warm border border-accent-warm/40">10-MIN PREP</span>;
-      case 'pitch':
-        return <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-brand-500/15 text-brand-500 border border-brand-500/40">3-MIN PITCH</span>;
-      case 'qa':
-        return <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-pool-b/15 text-pool-b border border-pool-b/40">2-MIN Q&A</span>;
+  const getStatusBadge = (status?: TimerStatus) => {
+    switch (status) {
+      case 'running':
+        return <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-brand-500/15 text-brand-500 border border-brand-500/40">RUNNING</span>;
       case 'paused':
         return <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-white/5 text-text-secondary border border-panel-border">PAUSED</span>;
+      case 'ended':
+        return <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-accent-live/15 text-accent-live border border-accent-live/40">ENDED</span>;
       default:
         return <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-white/5 text-text-secondary">IDLE</span>;
     }
   };
 
-  const isLowTime = secondsLeft <= 30 && eventState?.timer_phase !== 'idle' && eventState?.timer_phase !== 'paused';
+  const isLowTime = secondsLeft <= 30 && eventState?.timer_status === 'running';
 
   return (
     <div className="card rounded-xl p-4 flex flex-col md:flex-row items-center justify-between gap-4">
@@ -119,8 +127,8 @@ export default function CountdownTimer({
         </div>
         <div>
           <div className="flex items-center space-x-2">
-            <span className="text-xs uppercase tracking-wider text-text-secondary font-mono">Live Timer</span>
-            {getPhaseBadge(eventState?.timer_phase)}
+            <span className="text-xs uppercase tracking-wider text-text-secondary font-mono">Pitch Timer</span>
+            {getStatusBadge(eventState?.timer_status)}
           </div>
           <p className="text-xs text-text-secondary">Synced across Team, Judge, Organiser screens</p>
         </div>
@@ -131,42 +139,39 @@ export default function CountdownTimer({
           {formatTime(secondsLeft)}
         </div>
 
-        {showControls && onPhaseChange && (
+        {showControls && (
           <div className="flex items-center space-x-1.5 bg-white/5 p-1.5 rounded-lg border border-panel-border">
             <button
-              onClick={() => onPhaseChange('prep', 600)}
-              className="px-2.5 py-1 text-[11px] font-semibold bg-accent-warm/15 text-accent-warm hover:bg-accent-warm/25 rounded transition-colors"
-              title="10 Min Prep Phase"
+              onClick={onStart}
+              disabled={eventState?.timer_status === 'running'}
+              className="px-2.5 py-1 text-[11px] font-semibold bg-brand-500/15 text-brand-500 hover:bg-brand-500/25 disabled:opacity-40 rounded transition-colors flex items-center space-x-1"
+              title="Start Timer"
             >
-              Prep (10m)
+              <Play className="w-3.5 h-3.5" />
+              <span>Start</span>
             </button>
             <button
-              onClick={() => onPhaseChange('pitch', 180)}
-              className="px-2.5 py-1 text-[11px] font-semibold bg-brand-500/15 text-brand-500 hover:bg-brand-500/25 rounded transition-colors"
-              title="3 Min Pitching Phase"
-            >
-              Pitch (3m)
-            </button>
-            <button
-              onClick={() => onPhaseChange('qa', 120)}
-              className="px-2.5 py-1 text-[11px] font-semibold bg-pool-b/15 text-pool-b hover:bg-pool-b/25 rounded transition-colors"
-              title="2 Min Q&A Phase"
-            >
-              Q&A (2m)
-            </button>
-            <button
-              onClick={() => onPhaseChange('paused')}
-              className="px-2 py-1 text-[11px] font-semibold bg-white/5 text-text-secondary hover:bg-white/10 rounded transition-colors"
+              onClick={onPause}
+              disabled={eventState?.timer_status !== 'running'}
+              className="px-2 py-1 text-[11px] font-semibold bg-white/5 text-text-secondary hover:bg-white/10 disabled:opacity-40 rounded transition-colors"
               title="Pause Timer"
             >
               <Pause className="w-3.5 h-3.5" />
             </button>
             <button
-              onClick={() => onPhaseChange('idle')}
+              onClick={onReset}
               className="px-2 py-1 text-[11px] font-semibold bg-white/5 text-text-secondary hover:bg-white/10 rounded transition-colors"
               title="Reset Timer"
             >
-              Reset
+              <RotateCcw className="w-3.5 h-3.5" />
+            </button>
+            <button
+              onClick={onEnd}
+              className="px-2.5 py-1 text-[11px] font-semibold bg-accent-live/15 text-accent-live hover:bg-accent-live/25 rounded transition-colors flex items-center space-x-1"
+              title="End Pitch"
+            >
+              <Square className="w-3.5 h-3.5" />
+              <span>End Pitch</span>
             </button>
           </div>
         )}
