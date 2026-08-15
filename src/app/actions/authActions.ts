@@ -40,7 +40,13 @@ export async function verifyTeamOtpAction(email: string, token: string) {
   });
 
   if (error) {
-    return { error: error.message };
+    const isExpired = /expired/i.test(error.message);
+    return {
+      error: isExpired
+        ? 'This code has expired. Request a new one below.'
+        : 'Incorrect code. Please check and try again.',
+      expired: isExpired,
+    };
   }
 
   if (data.user) {
