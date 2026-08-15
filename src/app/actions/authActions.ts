@@ -160,21 +160,10 @@ export async function registerTeamAction(payload: {
     return { error: 'Failed to register team members.' };
   }
 
-  // 8. Create Pitch record for Prelim round automatically
-  const { data: prelimRound } = await adminSupabase
-    .from('rounds')
-    .select('id')
-    .eq('name', 'prelim')
-    .single();
-
-  if (prelimRound) {
-    await adminSupabase.from('pitches').insert({
-      team_id: team.id,
-      round_id: prelimRound.id,
-      status: 'upcoming',
-      pitch_order: countA + countB + 1,
-    });
-  }
+  // Pitch record creation for the prelim round is handled by the
+  // trg_create_prelim_pitch_for_team DB trigger (fires on team insert
+  // above), which owns queue_status/pitch_order — do not duplicate it
+  // here, that raced the trigger's UNIQUE(team_id, round_id) insert.
 
   return {
     success: true,

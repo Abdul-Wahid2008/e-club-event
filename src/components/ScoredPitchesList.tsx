@@ -46,7 +46,7 @@ export default function ScoredPitchesList({ entries }: ScoredPitchesListProps) {
               <td className="py-3 px-3 font-mono text-gray-300">{(e.solution_innovation_score / 5).toFixed(1)}</td>
               <td className="py-3 px-3 font-mono text-gray-300">{(e.feasibility_score / (100 / 15)).toFixed(1)}</td>
               <td className="py-3 px-3 font-mono text-gray-300">{(e.pitch_storytelling_score / (100 / 15)).toFixed(1)}</td>
-              <td className="py-3 px-3 font-mono font-bold text-brand-cyan">{e.total_weighted_score.toFixed(2)}</td>
+              <td className="py-3 px-3 font-mono font-bold text-brand-cyan">{(e.total_weighted_score ?? 0).toFixed(2)}</td>
               <td className="py-3 px-3 text-gray-400">{e.submitted_by_name || '—'}</td>
             </tr>
           ))}

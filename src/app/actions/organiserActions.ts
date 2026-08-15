@@ -244,10 +244,10 @@ export async function qualifyFinalFourAction() {
   // Separate Pool A and Pool B rankings
   const poolA = (leaderboard as PitchLeaderboardEntry[])
     .filter((item) => item.pool === 'A')
-    .sort((a, b) => b.total_weighted_score - a.total_weighted_score);
+    .sort((a, b) => (b.total_weighted_score ?? -1) - (a.total_weighted_score ?? -1));
   const poolB = (leaderboard as PitchLeaderboardEntry[])
     .filter((item) => item.pool === 'B')
-    .sort((a, b) => b.total_weighted_score - a.total_weighted_score);
+    .sort((a, b) => (b.total_weighted_score ?? -1) - (a.total_weighted_score ?? -1));
 
   const topPoolA = poolA.slice(0, 2);
   const topPoolB = poolB.slice(0, 2);

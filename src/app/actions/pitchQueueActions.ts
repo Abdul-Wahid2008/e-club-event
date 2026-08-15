@@ -31,6 +31,32 @@ export async function callToStageAction(pitchId: string) {
 
   const adminSupabase = createAdminClient();
 
+  // Guard against overwriting a pitch that's already active on stage — a
+  // double Call-to-Stage click (e.g. judge and organiser both act near-
+  // simultaneously) would otherwise silently strand the first pitch: it
+  // drops out of the 'queued' list but never reaches 'scored', requiring
+  // a manual DB fix mid-event.
+  const { data: currentState } = await adminSupabase
+    .from('event_state')
+    .select('current_pitch_id')
+    .eq('id', 1)
+    .single();
+
+  if (currentState?.current_pitch_id && currentState.current_pitch_id !== sanitizedPitchId) {
+    const { data: activePitch } = await adminSupabase
+      .from('pitches')
+      .select('queue_status, teams(team_name)')
+      .eq('id', currentState.current_pitch_id)
+      .single();
+
+    if (activePitch && activePitch.queue_status !== 'scored') {
+      const activeTeamName = (activePitch as any).teams?.team_name || 'another team';
+      return {
+        error: `${activeTeamName} is still on stage (${activePitch.queue_status}). End and score that pitch before calling the next one.`,
+      };
+    }
+  }
+
   const { error: pitchErr } = await adminSupabase
     .from('pitches')
     .update({ queue_status: 'called' })

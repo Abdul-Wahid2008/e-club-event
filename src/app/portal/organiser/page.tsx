@@ -15,77 +15,16 @@ import {
   exportRegistrationsCsvAction,
 } from '@/src/app/actions/organiserActions';
 
-const MOCK_TEAMS: Team[] = [
-  { id: 'mock-team-1', auth_user_id: 'u1', team_name: 'MedPulse AI', domain: 'Healthcare', pool: 'A', status: 'registered', created_at: new Date().toISOString() },
-  { id: 'mock-team-2', auth_user_id: 'u2', team_name: 'EcoDrive Mobility', domain: 'Mobility', pool: 'B', status: 'registered', created_at: new Date().toISOString() },
-  { id: 'mock-team-3', auth_user_id: 'u3', team_name: 'FinFlex Pay', domain: 'FinTech', pool: 'A', status: 'registered', created_at: new Date().toISOString() },
-  { id: 'mock-team-4', auth_user_id: 'u4', team_name: 'AgriGrow Tech', domain: 'Agriculture', pool: 'B', status: 'registered', created_at: new Date().toISOString() },
-];
-
-const MOCK_PITCHES: (Pitch & { teams?: Team })[] = [
-  { id: 'mock-pitch-1', team_id: 'mock-team-1', round_id: 'r1', status: 'live', queue_status: 'pitching', pitch_order: 1, queue_position_override: null, teams: MOCK_TEAMS[0] },
-  { id: 'mock-pitch-2', team_id: 'mock-team-2', round_id: 'r1', status: 'done', queue_status: 'scored', pitch_order: 2, queue_position_override: null, teams: MOCK_TEAMS[1] },
-  { id: 'mock-pitch-3', team_id: 'mock-team-3', round_id: 'r1', status: 'upcoming', queue_status: 'queued', pitch_order: 3, queue_position_override: null, teams: MOCK_TEAMS[2] },
-  { id: 'mock-pitch-4', team_id: 'mock-team-4', round_id: 'r1', status: 'upcoming', queue_status: 'queued', pitch_order: 4, queue_position_override: null, teams: MOCK_TEAMS[3] },
-];
-
-const MOCK_EVENT_STATE: EventState = {
-  id: 1,
-  current_pitch_id: 'mock-pitch-1',
-  current_round_id: 'r1',
-  timer_status: 'running',
-  timer_duration_seconds: 180,
-  timer_started_at: new Date(Date.now() - 45000).toISOString(),
-  timer_paused_remaining: null,
-  updated_at: new Date().toISOString(),
-};
-
-const MOCK_PENDING_QUESTIONS: Question[] = [
-  {
-    id: 'mock-q-201',
-    asking_team_id: 'mock-team-2',
-    pitch_id: 'mock-pitch-1',
-    question_text: 'What is your customer acquisition cost strategy for onboarding rural hospital networks?',
-    status: 'pending',
-    outcome: null,
-    points_to_team: 0,
-    points_to_asker: 0,
-    created_at: new Date(Date.now() - 60000).toISOString(),
-    asking_team: MOCK_TEAMS[1],
-  },
-];
-
-const MOCK_MEMBERS = [
-  { id: 'm1', team_id: 'mock-team-1', name: 'Sai Varun', email: 'saivarun@example.com', is_leader: true },
-  { id: 'm2', team_id: 'mock-team-1', name: 'Rohan Sharma', email: 'rohan@example.com', is_leader: false },
-  { id: 'm3', team_id: 'mock-team-2', name: 'Ananya Rao', email: 'ananya@example.com', is_leader: true },
-  { id: 'm4', team_id: 'mock-team-2', name: 'Vikram Singh', email: 'vikram@example.com', is_leader: false },
-  { id: 'm5', team_id: 'mock-team-3', name: 'Kavya Patel', email: 'kavya@example.com', is_leader: true },
-  { id: 'm6', team_id: 'mock-team-4', name: 'Aditya Verma', email: 'aditya@example.com', is_leader: true },
-];
-
-const MOCK_AUDIT_LOGS: ScoreAuditLog[] = [
-  {
-    id: 'a1',
-    changed_by: 'org-1',
-    table_changed: 'pitch_scores',
-    row_id: 'score-99',
-    old_value: { score: 7, locked: true },
-    new_value: { score: 9, locked: true },
-    note: 'Corrected typo in Judge Dr. Sharma problem_market score.',
-    timestamp: new Date(Date.now() - 3600000).toISOString(),
-  },
-];
-
 export default function OrganiserPortalPage() {
   const [activeTab, setActiveTab] = useState<'control' | 'registrations' | 'questions' | 'leaderboard' | 'audit'>('control');
 
-  const [eventState, setEventState] = useState<EventState | null>(MOCK_EVENT_STATE);
-  const [pitches, setPitches] = useState<(Pitch & { teams?: Team })[]>(MOCK_PITCHES);
-  const [teams, setTeams] = useState<Team[]>(MOCK_TEAMS);
-  const [teamMembers, setTeamMembers] = useState<any[]>(MOCK_MEMBERS);
-  const [pendingQuestions, setPendingQuestions] = useState<Question[]>(MOCK_PENDING_QUESTIONS);
-  const [auditLogs, setAuditLogs] = useState<ScoreAuditLog[]>(MOCK_AUDIT_LOGS);
+  const [eventState, setEventState] = useState<EventState | null>(null);
+  const [pitches, setPitches] = useState<(Pitch & { teams?: Team })[]>([]);
+  const [teams, setTeams] = useState<Team[]>([]);
+  const [teamMembers, setTeamMembers] = useState<any[]>([]);
+  const [pendingQuestions, setPendingQuestions] = useState<Question[]>([]);
+  const [auditLogs, setAuditLogs] = useState<ScoreAuditLog[]>([]);
+  const [loadingData, setLoadingData] = useState(true);
 
   const [selectedOverrideEntry, setSelectedOverrideEntry] = useState<PitchLeaderboardEntry | null>(null);
   const [qualifySuccessMsg, setQualifySuccessMsg] = useState<string | null>(null);
@@ -98,22 +37,22 @@ export default function OrganiserPortalPage() {
 
     // Event State
     const { data: es } = await supabase.from('event_state').select('*').eq('id', 1).single();
-    if (es) setEventState(es as EventState);
+    setEventState((es as EventState) || null);
 
     // Pitches with Team info
     const { data: pData } = await supabase
       .from('pitches')
       .select('*, teams(*)')
       .order('pitch_order', { ascending: true });
-    if (pData) setPitches(pData as any);
+    setPitches((pData as any) || []);
 
     // Teams
     const { data: tData } = await supabase.from('teams').select('*').order('created_at', { ascending: false });
-    if (tData) setTeams(tData as Team[]);
+    setTeams((tData as Team[]) || []);
 
     // Team Members
     const { data: tmData } = await supabase.from('team_members').select('*');
-    if (tmData) setTeamMembers(tmData);
+    setTeamMembers(tmData || []);
 
     // Pending Questions Queue
     const { data: qData } = await supabase
@@ -121,7 +60,7 @@ export default function OrganiserPortalPage() {
       .select('*, asking_team:teams(*)')
       .eq('status', 'pending')
       .order('created_at', { ascending: false });
-    if (qData) setPendingQuestions(qData as any);
+    setPendingQuestions((qData as any) || []);
 
     // Approved Q&A context for the currently-called pitch
     if (es?.current_pitch_id) {
@@ -130,21 +69,23 @@ export default function OrganiserPortalPage() {
         .select('*, asking_team:teams(*)')
         .eq('pitch_id', es.current_pitch_id)
         .eq('status', 'approved');
-      if (aqData) setApprovedQuestions(aqData as any);
+      setApprovedQuestions((aqData as any) || []);
     } else {
       setApprovedQuestions([]);
     }
 
     // Leaderboard (for Scored info surfaced via PitchQueuePanel + Manual Override)
     const { data: lbData } = await supabase.from('pitch_leaderboard').select('*').eq('round_name', 'prelim');
-    if (lbData) setLeaderboard(lbData as PitchLeaderboardEntry[]);
+    setLeaderboard((lbData as PitchLeaderboardEntry[]) || []);
 
     // Audit Log
     const { data: auditData } = await supabase
       .from('score_audit_log')
       .select('*')
       .order('timestamp', { ascending: false });
-    if (auditData) setAuditLogs(auditData as ScoreAuditLog[]);
+    setAuditLogs((auditData as ScoreAuditLog[]) || []);
+
+    setLoadingData(false);
   }, []);
 
   useEffect(() => {
@@ -205,6 +146,20 @@ export default function OrganiserPortalPage() {
     link.click();
     document.body.removeChild(link);
   };
+
+  if (loadingData) {
+    return (
+      <div className="min-h-screen flex flex-col bg-background text-gray-100">
+        <Navbar userRole="organiser" />
+        <main className="flex-1 flex items-center justify-center">
+          <div className="text-center space-y-3">
+            <div className="w-8 h-8 border-4 border-brand-cyan border-t-transparent rounded-full animate-spin mx-auto" />
+            <p className="text-sm text-gray-400 font-mono">Loading control room...</p>
+          </div>
+        </main>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen flex flex-col bg-background text-gray-100">

@@ -9,67 +9,13 @@ import { createClient } from '@/src/lib/supabase/client';
 import { EventState, Pitch, Team, Question } from '@/src/lib/types';
 import { submitAudienceRatingAction, submitQuestionAction } from '@/src/app/actions/teamActions';
 
-const MOCK_TEAM: Team = {
-  id: 'mock-team-4',
-  auth_user_id: 'mock-user-4',
-  team_name: 'AgriGrow Tech',
-  domain: 'Agriculture',
-  pool: 'B',
-  status: 'registered',
-  created_at: new Date().toISOString(),
-};
-
-const MOCK_PITCHING_TEAM: Team = {
-  id: 'mock-team-1',
-  auth_user_id: 'mock-user-1',
-  team_name: 'MedPulse AI',
-  domain: 'Healthcare',
-  pool: 'A',
-  status: 'registered',
-  created_at: new Date().toISOString(),
-};
-
-const MOCK_CURRENT_PITCH: Pitch & { teams?: Team } = {
-  id: 'mock-pitch-1',
-  team_id: 'mock-team-1',
-  round_id: 'mock-round-1',
-  status: 'live',
-  queue_status: 'pitching',
-  pitch_order: 1,
-  queue_position_override: null,
-  teams: MOCK_PITCHING_TEAM,
-};
-
-const MOCK_EVENT_STATE: EventState = {
-  id: 1,
-  current_pitch_id: 'mock-pitch-1',
-  current_round_id: 'mock-round-1',
-  timer_status: 'running',
-  timer_duration_seconds: 180,
-  timer_started_at: new Date(Date.now() - 45000).toISOString(),
-  timer_paused_remaining: null,
-  updated_at: new Date().toISOString(),
-};
-
-const MOCK_QUESTIONS: Question[] = [
-  {
-    id: 'mock-q-1',
-    asking_team_id: 'mock-team-4',
-    pitch_id: 'mock-pitch-2',
-    question_text: 'What is your unit cost per EV charging station in tier-2 cities?',
-    status: 'approved',
-    outcome: 'team_answered_well',
-    points_to_team: 1,
-    points_to_asker: 0,
-    created_at: new Date(Date.now() - 300000).toISOString(),
-  },
-];
-
 export default function TeamPortalPage() {
-  const [myTeam, setMyTeam] = useState<Team | null>(MOCK_TEAM);
-  const [eventState, setEventState] = useState<EventState | null>(MOCK_EVENT_STATE);
-  const [currentPitch, setCurrentPitch] = useState<(Pitch & { teams?: Team }) | null>(MOCK_CURRENT_PITCH);
-  const [myQuestions, setMyQuestions] = useState<Question[]>(MOCK_QUESTIONS);
+  const [myTeam, setMyTeam] = useState<Team | null>(null);
+  const [eventState, setEventState] = useState<EventState | null>(null);
+  const [currentPitch, setCurrentPitch] = useState<(Pitch & { teams?: Team }) | null>(null);
+  const [nextUpTeam, setNextUpTeam] = useState<Team | null>(null);
+  const [myQuestions, setMyQuestions] = useState<Question[]>([]);
+  const [loadingTeam, setLoadingTeam] = useState(true);
 
   // Rating Sliders (1-5 scale)
   const [problemRel, setProblemRel] = useState<number>(3);
@@ -98,9 +44,9 @@ export default function TeamPortalPage() {
         .eq('auth_user_id', user.id)
         .single();
 
-      if (team) {
-        setMyTeam(team as Team);
+      setMyTeam((team as Team) || null);
 
+      if (team) {
         // Fetch questions asked by my team
         const { data: qData } = await supabase
           .from('questions')
@@ -108,26 +54,44 @@ export default function TeamPortalPage() {
           .eq('asking_team_id', team.id)
           .order('created_at', { ascending: false });
 
-        if (qData) setMyQuestions(qData as Question[]);
+        setMyQuestions((qData as Question[]) || []);
       }
     }
 
     // Fetch Event State & Current Pitch
     const { data: es } = await supabase.from('event_state').select('*').eq('id', 1).single();
-    if (es) {
-      setEventState(es as EventState);
-      if (es.current_pitch_id) {
-        const { data: pData } = await supabase
-          .from('pitches')
-          .select('*, teams(*)')
-          .eq('id', es.current_pitch_id)
-          .single();
+    setEventState((es as EventState) || null);
+    if (es?.current_pitch_id) {
+      const { data: pData } = await supabase
+        .from('pitches')
+        .select('*, teams(*)')
+        .eq('id', es.current_pitch_id)
+        .single();
 
-        if (pData) setCurrentPitch(pData as any);
-      } else {
-        setCurrentPitch(null);
-      }
+      setCurrentPitch((pData as any) || null);
+    } else {
+      setCurrentPitch(null);
     }
+
+    // Who's next in the queue, so waiting teams know when to prepare.
+    const { data: queuedPitches } = await supabase
+      .from('pitches')
+      .select('team_id, pitch_order, queue_position_override, teams(*)')
+      .eq('queue_status', 'queued')
+      .order('pitch_order', { ascending: true });
+
+    if (queuedPitches && queuedPitches.length > 0) {
+      const sorted = [...queuedPitches].sort((a: any, b: any) => {
+        const aKey = a.queue_position_override ?? a.pitch_order;
+        const bKey = b.queue_position_override ?? b.pitch_order;
+        return aKey - bKey;
+      });
+      setNextUpTeam((sorted[0] as any)?.teams || null);
+    } else {
+      setNextUpTeam(null);
+    }
+
+    setLoadingTeam(false);
   };
 
   useEffect(() => {
@@ -197,6 +161,20 @@ export default function TeamPortalPage() {
     }
   };
 
+  if (loadingTeam) {
+    return (
+      <div className="min-h-screen flex flex-col bg-background text-gray-100">
+        <Navbar userRole="team" />
+        <main className="flex-1 flex items-center justify-center">
+          <div className="text-center space-y-3">
+            <div className="w-8 h-8 border-4 border-brand-cyan border-t-transparent rounded-full animate-spin mx-auto" />
+            <p className="text-sm text-gray-400 font-mono">Loading your team...</p>
+          </div>
+        </main>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen flex flex-col bg-background text-gray-100">
       <Navbar userRole="team" teamName={myTeam?.team_name} />
@@ -235,6 +213,28 @@ export default function TeamPortalPage() {
             </div>
           )}
         </div>
+
+        {/* NEXT UP INDICATOR */}
+        {nextUpTeam && (
+          <div className={`glass-card rounded-2xl p-4 border flex items-center justify-between gap-3 ${
+            myTeam && nextUpTeam.id === myTeam.id
+              ? 'border-brand-gold/50 bg-brand-gold/10'
+              : 'border-surface-border'
+          }`}>
+            <div>
+              <span className="text-[10px] uppercase tracking-wider text-gray-400 font-mono block">Next Up</span>
+              <p className="text-sm font-bold text-white">
+                {nextUpTeam.team_name}
+                {myTeam && nextUpTeam.id === myTeam.id && (
+                  <span className="ml-2 text-brand-gold">— that&apos;s you, get ready!</span>
+                )}
+              </p>
+            </div>
+            <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-gray-800 text-gray-300 border border-gray-700 shrink-0">
+              Pool {nextUpTeam.pool}
+            </span>
+          </div>
+        )}
 
         {/* AUDIENCE VOTING & QUESTION SUBMISSION PANEL */}
         {currentPitch && pitchingTeam && (

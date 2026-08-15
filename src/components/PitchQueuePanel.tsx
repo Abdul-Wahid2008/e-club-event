@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { Reorder } from 'framer-motion';
-import { GripVertical, Flame, Lock, HelpCircle, CheckCircle2 } from 'lucide-react';
+import { GripVertical, Flame, Lock, HelpCircle, CheckCircle2, SkipForward } from 'lucide-react';
 import CountdownTimer from '@/src/components/CountdownTimer';
 import { createClient } from '@/src/lib/supabase/client';
 import { EventState, Pitch, Team, Question } from '@/src/lib/types';
@@ -68,6 +68,26 @@ export default function PitchQueuePanel({ eventState, pitches, approvedQuestions
     onDataChange();
   };
 
+  const handleSkip = async (pitch: PitchWithTeam) => {
+    if (!confirm(`Move ${pitch.teams?.team_name || 'this team'} to the back of the queue? Use this for no-shows — they'll stay queued and can be called later.`)) return;
+    setLoadingAction(true);
+    setActionError(null);
+    const reordered = [...queue.filter((p) => p.id !== pitch.id), pitch];
+    setQueue(reordered);
+    const res = await reorderQueueAction(reordered.map((p) => p.id));
+    setLoadingAction(false);
+    if ((res as any)?.error) setActionError((res as any).error);
+    onDataChange();
+  };
+
+  const handleEndPitch = async () => {
+    if (!confirm(`End the pitch for ${pitchingTeam?.team_name || 'this team'} now and move to scoring?`)) return;
+    setActionError(null);
+    const r = await endPitchAction();
+    if (r.error) setActionError(r.error);
+    onDataChange();
+  };
+
   const handleSubmitScore = async () => {
     if (!currentPitch) return;
     setLoadingAction(true);
@@ -100,7 +120,7 @@ export default function PitchQueuePanel({ eventState, pitches, approvedQuestions
         onStart={async () => { setActionError(null); const r = await startTimerAction(); if (r.error) setActionError(r.error); onDataChange(); }}
         onPause={async () => { setActionError(null); const r = await pauseTimerAction(); if (r.error) setActionError(r.error); onDataChange(); }}
         onReset={async () => { setActionError(null); const r = await resetTimerAction(); if (r.error) setActionError(r.error); onDataChange(); }}
-        onEnd={async () => { setActionError(null); const r = await endPitchAction(); if (r.error) setActionError(r.error); onDataChange(); }}
+        onEnd={handleEndPitch}
       />
 
       {actionError && (
@@ -199,7 +219,7 @@ export default function PitchQueuePanel({ eventState, pitches, approvedQuestions
           <p className="text-xs text-gray-500 italic py-4 text-center">No teams currently queued.</p>
         ) : (
           <Reorder.Group axis="y" values={queue} onReorder={handleReorder} className="space-y-2">
-            {queue.map((p) => (
+            {queue.map((p, i) => (
               <Reorder.Item
                 key={p.id}
                 value={p}
@@ -208,19 +228,36 @@ export default function PitchQueuePanel({ eventState, pitches, approvedQuestions
                 <div className="flex items-center space-x-3 min-w-0">
                   <GripVertical className="w-4 h-4 text-gray-600 shrink-0" />
                   <div className="min-w-0">
-                    <p className="text-sm font-bold text-white truncate">{p.teams?.team_name || 'Unassigned'}</p>
+                    <div className="flex items-center gap-2">
+                      <p className="text-sm font-bold text-white truncate">{p.teams?.team_name || 'Unassigned'}</p>
+                      {i === 0 && !pitchingTeam && (
+                        <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-brand-gold/20 text-brand-gold border border-brand-gold/40 shrink-0 uppercase tracking-wider">
+                          Next Up
+                        </span>
+                      )}
+                    </div>
                     <p className="text-[11px] text-gray-400">
                       Domain: <span className="text-brand-gold">{p.teams?.domain}</span> • Pool {p.teams?.pool}
                     </p>
                   </div>
                 </div>
-                <button
-                  onClick={() => handleCallToStage(p.id)}
-                  disabled={loadingAction}
-                  className="px-3 py-1.5 rounded-lg font-bold text-xs bg-brand-cyan/20 hover:bg-brand-cyan hover:text-black text-brand-cyan border border-brand-cyan/40 transition-all shrink-0"
-                >
-                  Call to Stage
-                </button>
+                <div className="flex items-center gap-2 shrink-0">
+                  <button
+                    onClick={() => handleSkip(p)}
+                    disabled={loadingAction}
+                    title="Skip — send to back of queue (no-show)"
+                    className="px-2 py-1.5 rounded-lg font-bold text-xs bg-gray-800 hover:bg-gray-700 text-gray-400 border border-gray-700 transition-all flex items-center gap-1"
+                  >
+                    <SkipForward className="w-3.5 h-3.5" />
+                  </button>
+                  <button
+                    onClick={() => handleCallToStage(p.id)}
+                    disabled={loadingAction}
+                    className="px-3 py-1.5 rounded-lg font-bold text-xs bg-brand-cyan/20 hover:bg-brand-cyan hover:text-black text-brand-cyan border border-brand-cyan/40 transition-all"
+                  >
+                    Call to Stage
+                  </button>
+                </div>
               </Reorder.Item>
             ))}
           </Reorder.Group>

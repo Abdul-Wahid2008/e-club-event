@@ -174,5 +174,6 @@ export interface PitchLeaderboardEntry {
   submitted_by_name: string | null;
   total_voters: number;
   total_qa_points: number;
-  total_weighted_score: number;
+  // Null until a judge has actually submitted a score for this pitch.
+  total_weighted_score: number | null;
 }
