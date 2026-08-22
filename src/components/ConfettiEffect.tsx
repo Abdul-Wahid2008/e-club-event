@@ -19,11 +19,11 @@ export function triggerConfetti() {
   fire(0.25, {
     spread: 26,
     startVelocity: 55,
-    colors: ['#00f0ff', '#7000ff', '#ffb703']
+    colors: ['#5B7CFA', '#7C3AED', '#FFB020']
   });
   fire(0.2, {
     spread: 60,
-    colors: ['#ff007a', '#10b981', '#ffffff']
+    colors: ['#FF4B3E', '#34D399', '#F7F8FC']
   });
   fire(0.35, {
     spread: 100,
@@ -34,7 +34,7 @@ export function triggerConfetti() {
     spread: 120,
     startVelocity: 25,
     decay: 0.92,
-    colors: ['#00f0ff', '#ffb703']
+    colors: ['#5B7CFA', '#FFB020']
   });
   fire(0.1, {
     spread: 120,

@@ -2,9 +2,13 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Trophy, Award, Users, HelpCircle, ChevronDown, ChevronUp, Sparkles } from 'lucide-react';
+import { Trophy, ChevronDown, ChevronUp, Sparkles } from 'lucide-react';
 import { createClient } from '@/src/lib/supabase/client';
 import { PitchLeaderboardEntry } from '@/src/lib/types';
+import PoolBadge from '@/src/components/PoolBadge';
+import AnimatedNumber from '@/src/components/AnimatedNumber';
+import { SkeletonLeaderboardRow } from '@/src/components/Skeleton';
+import { usePrefersReducedMotion } from '@/src/lib/useReducedMotion';
 
 interface LiveLeaderboardProps {
   roundName?: 'prelim' | 'final';
@@ -12,97 +16,15 @@ interface LiveLeaderboardProps {
   showOverrideButton?: boolean;
 }
 
-const MOCK_LEADERBOARD: PitchLeaderboardEntry[] = [
-  {
-    team_id: 'mock-team-1',
-    team_name: 'MedPulse AI',
-    domain: 'Healthcare',
-    pool: 'A',
-    pitch_id: 'mock-pitch-1',
-    round_id: 'mock-round-1',
-    round_name: 'prelim',
-    pitch_status: 'live',
-    problem_market_score: 90,
-    solution_innovation_score: 85,
-    feasibility_score: 85,
-    pitch_storytelling_score: 90,
-    audience_rating_score: 88,
-    qa_pressure_score: 80,
-    judges_submitted_count: 5,
-    total_voters: 12,
-    total_qa_points: 3,
-    total_weighted_score: 86.85,
-  },
-  {
-    team_id: 'mock-team-2',
-    team_name: 'EcoDrive Mobility',
-    domain: 'Mobility',
-    pool: 'B',
-    pitch_id: 'mock-pitch-2',
-    round_id: 'mock-round-1',
-    round_name: 'prelim',
-    pitch_status: 'done',
-    problem_market_score: 80,
-    solution_innovation_score: 85,
-    feasibility_score: 80,
-    pitch_storytelling_score: 85,
-    audience_rating_score: 84,
-    qa_pressure_score: 70,
-    judges_submitted_count: 6,
-    total_voters: 10,
-    total_qa_points: 2,
-    total_weighted_score: 81.55,
-  },
-  {
-    team_id: 'mock-team-3',
-    team_name: 'FinFlex Pay',
-    domain: 'FinTech',
-    pool: 'A',
-    pitch_id: 'mock-pitch-3',
-    round_id: 'mock-round-1',
-    round_name: 'prelim',
-    pitch_status: 'upcoming',
-    problem_market_score: 75,
-    solution_innovation_score: 80,
-    feasibility_score: 80,
-    pitch_storytelling_score: 75,
-    audience_rating_score: 78,
-    qa_pressure_score: 60,
-    judges_submitted_count: 4,
-    total_voters: 8,
-    total_qa_points: 1,
-    total_weighted_score: 75.85,
-  },
-  {
-    team_id: 'mock-team-4',
-    team_name: 'AgriGrow Tech',
-    domain: 'Agriculture',
-    pool: 'B',
-    pitch_id: 'mock-pitch-4',
-    round_id: 'mock-round-1',
-    round_name: 'prelim',
-    pitch_status: 'upcoming',
-    problem_market_score: 70,
-    solution_innovation_score: 75,
-    feasibility_score: 70,
-    pitch_storytelling_score: 75,
-    audience_rating_score: 72,
-    qa_pressure_score: 50,
-    judges_submitted_count: 3,
-    total_voters: 6,
-    total_qa_points: 0,
-    total_weighted_score: 70.15,
-  },
-];
-
 export default function LiveLeaderboard({
   roundName = 'prelim',
   onOverrideClick,
   showOverrideButton = false,
 }: LiveLeaderboardProps) {
-  const [leaderboard, setLeaderboard] = useState<PitchLeaderboardEntry[]>(MOCK_LEADERBOARD);
-  const [expandedTeamId, setExpandedTeamId] = useState<string | null>('mock-team-1');
-  const [loading, setLoading] = useState(false);
+  const reduced = usePrefersReducedMotion();
+  const [leaderboard, setLeaderboard] = useState<PitchLeaderboardEntry[]>([]);
+  const [expandedTeamId, setExpandedTeamId] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
 
   const fetchLeaderboard = useCallback(async () => {
     try {
@@ -112,11 +34,13 @@ export default function LiveLeaderboard({
         .select('*')
         .eq('round_name', roundName);
 
-      if (!error && data && data.length > 0) {
+      if (!error && data) {
         setLeaderboard(data as PitchLeaderboardEntry[]);
       }
     } catch (e) {
-      // Keep mock fallback on error
+      // Leave leaderboard as-is on transient error
+    } finally {
+      setLoading(false);
     }
   }, [roundName]);
 
@@ -127,7 +51,7 @@ export default function LiveLeaderboard({
     // Realtime subscriptions across all relevant tables
     const channel = supabase
       .channel('leaderboard_realtime')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'judge_scores' }, () => fetchLeaderboard())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'pitch_scores' }, () => fetchLeaderboard())
       .on('postgres_changes', { event: '*', schema: 'public', table: 'audience_scores' }, () => fetchLeaderboard())
       .on('postgres_changes', { event: '*', schema: 'public', table: 'questions' }, () => fetchLeaderboard())
       .on('postgres_changes', { event: '*', schema: 'public', table: 'pitches' }, () => fetchLeaderboard())
@@ -144,67 +68,71 @@ export default function LiveLeaderboard({
 
   if (loading) {
     return (
-      <div className="glass-card rounded-2xl p-8 text-center border border-surface-border">
-        <div className="w-8 h-8 border-4 border-brand-cyan border-t-transparent rounded-full animate-spin mx-auto mb-3" />
-        <p className="text-sm text-gray-400 font-mono">Loading real-time leaderboard...</p>
+      <div className="card rounded-2xl p-4 sm:p-6 space-y-3">
+        <SkeletonLeaderboardRow />
+        <SkeletonLeaderboardRow />
+        <SkeletonLeaderboardRow />
       </div>
     );
   }
 
   if (leaderboard.length === 0) {
     return (
-      <div className="glass-card rounded-2xl p-8 text-center border border-surface-border">
-        <Trophy className="w-12 h-12 text-gray-600 mx-auto mb-3" />
-        <h3 className="text-lg font-bold text-gray-300">No Pitch Scores Yet</h3>
-        <p className="text-sm text-gray-400 mt-1">Scores will appear in real-time as judges and audience vote.</p>
+      <div className="card rounded-2xl p-8 text-center">
+        <Trophy className="w-12 h-12 text-text-secondary/50 mx-auto mb-3" />
+        <h3 className="text-lg font-bold text-text-primary">No Pitch Scores Yet</h3>
+        <p className="text-sm text-text-secondary mt-1">Scores will appear in real-time as judges and audience vote.</p>
       </div>
     );
   }
 
   return (
-    <div className="glass-card rounded-2xl p-4 sm:p-6 border border-surface-border">
-      <div className="flex items-center justify-between mb-6 pb-4 border-b border-gray-800">
+    <div className="card rounded-2xl p-4 sm:p-6">
+      <div className="flex items-center justify-between mb-6 pb-4 border-b border-panel-border">
         <div className="flex items-center space-x-3">
-          <div className="w-9 h-9 rounded-lg bg-brand-gold/10 text-brand-gold flex items-center justify-center border border-brand-gold/30">
+          <div className="w-9 h-9 rounded-lg bg-accent-warm/10 text-accent-warm flex items-center justify-center border border-accent-warm/30">
             <Trophy className="w-5 h-5" />
           </div>
           <div>
-            <h2 className="text-lg font-bold text-white flex items-center gap-2">
+            <h2 className="text-lg font-bold text-text-primary flex items-center gap-2">
               Live Leaderboard
-              <span className="px-2 py-0.5 rounded text-[10px] font-mono font-semibold uppercase bg-brand-cyan/20 text-brand-cyan border border-brand-cyan/30">
+              <span className="px-2 py-0.5 rounded text-[10px] font-mono font-semibold uppercase bg-brand-500/15 text-brand-500 border border-brand-500/30">
                 {roundName} Round
               </span>
             </h2>
-            <p className="text-xs text-gray-400">Weighted Total: Judge (70%) • Audience (20%) • Q&A (10%)</p>
+            <p className="text-xs text-text-secondary">Weighted Total: Judge (70%) • Audience (20%) • Q&A (10%)</p>
           </div>
         </div>
-        <span className="text-xs text-gray-400 font-mono hidden sm:inline-block">Auto-updating via Supabase Realtime</span>
+        <span className="text-xs text-text-secondary font-mono hidden sm:inline-block">Auto-updating via Supabase Realtime</span>
       </div>
 
       <div className="space-y-3">
         <AnimatePresence>
-          {leaderboard.map((item, index) => {
-            const rank = index + 1;
-            const isTop3 = rank <= 3;
+          {(() => {
+            let scoredSeen = 0;
+            return leaderboard.map((item) => {
+            const isScored = item.total_weighted_score !== null;
+            const rank = isScored ? ++scoredSeen : null;
+            const isTop3 = rank !== null && rank <= 3;
             const isExpanded = expandedTeamId === item.team_id;
 
-            let rankColor = 'bg-gray-800 text-gray-400 border-gray-700';
-            if (rank === 1) rankColor = 'bg-gradient-to-r from-amber-500 to-yellow-400 text-black border-amber-300 shadow-gold-glow';
-            else if (rank === 2) rankColor = 'bg-slate-300 text-gray-900 border-white';
+            let rankColor = 'bg-white/5 text-text-secondary border-panel-border';
+            if (rank === 1) rankColor = 'bg-gradient-to-r from-accent-warm to-yellow-400 text-bg-base border-accent-warm shadow-warm-glow';
+            else if (rank === 2) rankColor = 'bg-slate-300 text-bg-base border-white';
             else if (rank === 3) rankColor = 'bg-amber-700 text-amber-100 border-amber-600';
 
             return (
               <motion.div
                 key={item.team_id}
                 layout
-                initial={{ opacity: 0, y: 12 }}
+                initial={reduced ? undefined : { opacity: 0, y: 12 }}
                 animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, scale: 0.95 }}
+                exit={reduced ? undefined : { opacity: 0, scale: 0.95 }}
                 transition={{ type: 'spring', stiffness: 350, damping: 25 }}
                 className={`rounded-xl border transition-all ${
                   isTop3
-                    ? 'bg-surface-card/90 border-brand-gold/30 shadow-lg'
-                    : 'bg-surface/60 border-surface-border hover:border-gray-700'
+                    ? 'bg-white/[0.04] border-accent-warm/30 shadow-lg'
+                    : 'bg-white/[0.02] border-panel-border hover:border-white/20'
                 }`}
               >
                 <div
@@ -214,24 +142,22 @@ export default function LiveLeaderboard({
                   <div className="flex items-center space-x-3 min-w-0">
                     {/* Rank Badge */}
                     <div className={`w-8 h-8 sm:w-9 sm:h-9 rounded-lg flex items-center justify-center font-black text-sm border shrink-0 ${rankColor}`}>
-                      {rank === 1 ? <Sparkles className="w-4 h-4" /> : `#${rank}`}
+                      {rank === null ? '—' : rank === 1 ? <Sparkles className="w-4 h-4" /> : `#${rank}`}
                     </div>
 
                     {/* Team Info */}
                     <div className="min-w-0">
                       <div className="flex items-center space-x-2">
-                        <span className="font-bold text-white text-sm sm:text-base truncate">{item.team_name}</span>
-                        <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-gray-800 text-gray-300 border border-gray-700 shrink-0">
-                          Pool {item.pool}
-                        </span>
+                        <span className="font-bold text-text-primary text-sm sm:text-base truncate">{item.team_name}</span>
+                        <PoolBadge pool={item.pool} className="shrink-0" />
                         {item.pitch_status === 'live' && (
-                          <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-red-500/20 text-red-400 border border-red-500/40 animate-pulse shrink-0">
+                          <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-accent-live/15 text-accent-live border border-accent-live/40 shrink-0">
                             NOW PITCHING
                           </span>
                         )}
                       </div>
-                      <p className="text-xs text-gray-400 truncate mt-0.5">
-                        Domain: <span className="text-gray-300 font-medium">{item.domain}</span>
+                      <p className="text-xs text-text-secondary truncate mt-0.5">
+                        Domain: <span className="text-text-primary/80 font-medium">{item.domain}</span>
                       </p>
                     </div>
                   </div>
@@ -239,17 +165,19 @@ export default function LiveLeaderboard({
                   {/* Score & Toggle */}
                   <div className="flex items-center space-x-3 shrink-0">
                     <div className="text-right">
-                      <div className="text-base sm:text-xl font-extrabold text-brand-cyan tracking-tight">
-                        {item.total_weighted_score.toFixed(1)} <span className="text-xs font-normal text-gray-400">pts</span>
+                      <div className="text-base sm:text-xl font-extrabold text-brand-500 tracking-tight">
+                        {item.total_weighted_score !== null
+                          ? <><AnimatedNumber value={item.total_weighted_score} decimals={1} /> <span className="text-xs font-normal text-text-secondary">pts</span></>
+                          : <span className="text-text-secondary text-sm font-semibold">Awaiting score</span>}
                       </div>
-                      <div className="text-[10px] text-gray-400 font-mono">
-                        {item.judges_submitted_count} Judges • {item.total_voters} Voters
+                      <div className="text-[10px] text-text-secondary font-mono">
+                        {item.judges_submitted_count > 0 ? `Scored by ${item.submitted_by_name}` : 'Not scored yet'} • {item.total_voters} Voters
                       </div>
                     </div>
 
                     <button
                       type="button"
-                      className="w-7 h-7 rounded-lg bg-gray-800 hover:bg-gray-700 text-gray-400 flex items-center justify-center transition-colors"
+                      className="w-7 h-7 rounded-lg bg-white/5 hover:bg-white/10 text-text-secondary flex items-center justify-center transition-colors"
                     >
                       {isExpanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
                     </button>
@@ -263,32 +191,32 @@ export default function LiveLeaderboard({
                       initial={{ height: 0, opacity: 0 }}
                       animate={{ height: 'auto', opacity: 1 }}
                       exit={{ height: 0, opacity: 0 }}
-                      className="px-4 pb-4 pt-2 border-t border-gray-800/80 bg-gray-950/40 rounded-b-xl space-y-3"
+                      className="px-4 pb-4 pt-2 border-t border-panel-border bg-black/20 rounded-b-xl space-y-3"
                     >
                       <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 text-xs">
-                        <div className="bg-gray-900/80 p-2.5 rounded-lg border border-gray-800">
-                          <span className="text-gray-400 text-[10px] uppercase tracking-wider block">Problem & Market (20%)</span>
-                          <span className="font-mono font-bold text-gray-200 text-sm">{item.problem_market_score.toFixed(1)} / 100</span>
+                        <div className="bg-white/[0.03] p-2.5 rounded-lg border border-panel-border">
+                          <span className="text-text-secondary text-[10px] uppercase tracking-wider block">Problem & Market (20%)</span>
+                          <span className="font-mono font-bold text-text-primary text-sm">{item.problem_market_score.toFixed(1)} / 100</span>
                         </div>
-                        <div className="bg-gray-900/80 p-2.5 rounded-lg border border-gray-800">
-                          <span className="text-gray-400 text-[10px] uppercase tracking-wider block">Solution & Innovation (20%)</span>
-                          <span className="font-mono font-bold text-gray-200 text-sm">{item.solution_innovation_score.toFixed(1)} / 100</span>
+                        <div className="bg-white/[0.03] p-2.5 rounded-lg border border-panel-border">
+                          <span className="text-text-secondary text-[10px] uppercase tracking-wider block">Solution & Innovation (20%)</span>
+                          <span className="font-mono font-bold text-text-primary text-sm">{item.solution_innovation_score.toFixed(1)} / 100</span>
                         </div>
-                        <div className="bg-gray-900/80 p-2.5 rounded-lg border border-gray-800">
-                          <span className="text-gray-400 text-[10px] uppercase tracking-wider block">Feasibility (15%)</span>
-                          <span className="font-mono font-bold text-gray-200 text-sm">{item.feasibility_score.toFixed(1)} / 100</span>
+                        <div className="bg-white/[0.03] p-2.5 rounded-lg border border-panel-border">
+                          <span className="text-text-secondary text-[10px] uppercase tracking-wider block">Feasibility (15%)</span>
+                          <span className="font-mono font-bold text-text-primary text-sm">{item.feasibility_score.toFixed(1)} / 100</span>
                         </div>
-                        <div className="bg-gray-900/80 p-2.5 rounded-lg border border-gray-800">
-                          <span className="text-gray-400 text-[10px] uppercase tracking-wider block">Storytelling (15%)</span>
-                          <span className="font-mono font-bold text-gray-200 text-sm">{item.pitch_storytelling_score.toFixed(1)} / 100</span>
+                        <div className="bg-white/[0.03] p-2.5 rounded-lg border border-panel-border">
+                          <span className="text-text-secondary text-[10px] uppercase tracking-wider block">Storytelling (15%)</span>
+                          <span className="font-mono font-bold text-text-primary text-sm">{item.pitch_storytelling_score.toFixed(1)} / 100</span>
                         </div>
-                        <div className="bg-gray-900/80 p-2.5 rounded-lg border border-gray-800">
-                          <span className="text-gray-400 text-[10px] uppercase tracking-wider block">Audience Rating (20%)</span>
-                          <span className="font-mono font-bold text-brand-gold text-sm">{item.audience_rating_score.toFixed(1)} / 100</span>
+                        <div className="bg-white/[0.03] p-2.5 rounded-lg border border-panel-border">
+                          <span className="text-text-secondary text-[10px] uppercase tracking-wider block">Audience Rating (20%)</span>
+                          <span className="font-mono font-bold text-accent-warm text-sm">{item.audience_rating_score.toFixed(1)} / 100</span>
                         </div>
-                        <div className="bg-gray-900/80 p-2.5 rounded-lg border border-gray-800">
-                          <span className="text-gray-400 text-[10px] uppercase tracking-wider block">Q&A Pressure Test (10%)</span>
-                          <span className="font-mono font-bold text-brand-pink text-sm">{item.qa_pressure_score.toFixed(1)} / 100 ({item.total_qa_points > 0 ? `+${item.total_qa_points}` : item.total_qa_points} pts)</span>
+                        <div className="bg-white/[0.03] p-2.5 rounded-lg border border-panel-border">
+                          <span className="text-text-secondary text-[10px] uppercase tracking-wider block">Q&A Pressure Test (10%)</span>
+                          <span className="font-mono font-bold text-accent-live text-sm">{item.qa_pressure_score.toFixed(1)} / 100 ({item.total_qa_points > 0 ? `+${item.total_qa_points}` : item.total_qa_points} pts)</span>
                         </div>
                       </div>
 
@@ -299,7 +227,7 @@ export default function LiveLeaderboard({
                               e.stopPropagation();
                               onOverrideClick(item);
                             }}
-                            className="px-3 py-1.5 bg-brand-purple/20 hover:bg-brand-purple/30 text-brand-purple border border-brand-purple/40 rounded-lg text-xs font-semibold transition-colors"
+                            className="px-3 py-1.5 bg-brand-500/15 hover:bg-brand-500/25 text-brand-500 border border-brand-500/40 rounded-lg text-xs font-semibold transition-colors"
                           >
                             Manual Score Override / Unlock
                           </button>
@@ -310,7 +238,8 @@ export default function LiveLeaderboard({
                 </AnimatePresence>
               </motion.div>
             );
-          })}
+            });
+          })()}
         </AnimatePresence>
       </div>
     </div>

@@ -8,27 +8,43 @@ module.exports = {
   theme: {
     extend: {
       colors: {
-        background: '#090d16',
-        surface: '#111827',
-        'surface-card': '#1f293d',
-        'surface-border': '#374151',
+        'bg-base': '#0A0E17',
+        panel: 'rgba(13,17,28,0.92)',
+        'panel-border': 'rgba(255,255,255,0.08)',
+        'text-primary': '#F7F8FC',
+        'text-secondary': '#9AA3B8',
         brand: {
-          cyan: '#00f0ff',
-          purple: '#7000ff',
-          pink: '#ff007a',
-          gold: '#ffb703',
-          emerald: '#10b981',
-          crimson: '#ef4444'
-        }
+          500: '#5B7CFA',
+        },
+        accent: {
+          live: '#FF4B3E',
+          warm: '#FFB020',
+        },
+        pool: {
+          a: '#4C8DFF',
+          b: '#FF9F45',
+        },
+        success: {
+          500: '#34D399',
+        },
+        danger: {
+          500: '#FB5B5B',
+        },
+        orb: {
+          1: '#3355FF',
+          2: '#7C3AED',
+          3: '#FF4B3E',
+        },
       },
       fontFamily: {
-        sans: ['Inter', 'system-ui', 'sans-serif'],
+        sans: ['var(--font-inter)', 'Inter', 'system-ui', 'sans-serif'],
+        display: ['var(--font-space-grotesk)', 'Space Grotesk', 'system-ui', 'sans-serif'],
       },
       boxShadow: {
-        'cyan-glow': '0 0 25px rgba(0, 240, 255, 0.35)',
-        'purple-glow': '0 0 25px rgba(112, 0, 255, 0.35)',
-        'gold-glow': '0 0 25px rgba(255, 183, 3, 0.35)',
-      }
+        'brand-glow': '0 0 25px rgba(91, 124, 250, 0.35)',
+        'live-glow': '0 0 25px rgba(255, 75, 62, 0.35)',
+        'warm-glow': '0 0 25px rgba(255, 176, 32, 0.35)',
+      },
     },
   },
   plugins: [],

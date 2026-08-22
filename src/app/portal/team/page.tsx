@@ -4,70 +4,20 @@ import { useState, useEffect } from 'react';
 import Navbar from '@/src/components/Navbar';
 import CountdownTimer from '@/src/components/CountdownTimer';
 import LiveLeaderboard from '@/src/components/LiveLeaderboard';
-import { Users, Flame, Send, CheckCircle2, ShieldAlert, Trophy, Award, HelpCircle } from 'lucide-react';
+import Toast, { ToastMessage } from '@/src/components/Toast';
+import PoolBadge from '@/src/components/PoolBadge';
+import { Users, Flame, Send, CheckCircle2, ShieldAlert, Trophy, HelpCircle } from 'lucide-react';
 import { createClient } from '@/src/lib/supabase/client';
 import { EventState, Pitch, Team, Question } from '@/src/lib/types';
 import { submitAudienceRatingAction, submitQuestionAction } from '@/src/app/actions/teamActions';
 
-const MOCK_TEAM: Team = {
-  id: 'mock-team-4',
-  auth_user_id: 'mock-user-4',
-  team_name: 'AgriGrow Tech',
-  domain: 'Agriculture',
-  pool: 'B',
-  status: 'registered',
-  created_at: new Date().toISOString(),
-};
-
-const MOCK_PITCHING_TEAM: Team = {
-  id: 'mock-team-1',
-  auth_user_id: 'mock-user-1',
-  team_name: 'MedPulse AI',
-  domain: 'Healthcare',
-  pool: 'A',
-  status: 'registered',
-  created_at: new Date().toISOString(),
-};
-
-const MOCK_CURRENT_PITCH: Pitch & { teams?: Team } = {
-  id: 'mock-pitch-1',
-  team_id: 'mock-team-1',
-  round_id: 'mock-round-1',
-  status: 'live',
-  pitch_order: 1,
-  teams: MOCK_PITCHING_TEAM,
-};
-
-const MOCK_EVENT_STATE: EventState = {
-  id: 1,
-  current_pitch_id: 'mock-pitch-1',
-  current_round_id: 'mock-round-1',
-  timer_phase: 'pitch',
-  timer_duration_seconds: 180,
-  timer_started_at: new Date(Date.now() - 45000).toISOString(),
-  timer_paused_remaining: null,
-  updated_at: new Date().toISOString(),
-};
-
-const MOCK_QUESTIONS: Question[] = [
-  {
-    id: 'mock-q-1',
-    asking_team_id: 'mock-team-4',
-    pitch_id: 'mock-pitch-2',
-    question_text: 'What is your unit cost per EV charging station in tier-2 cities?',
-    status: 'approved',
-    outcome: 'team_answered_well',
-    points_to_team: 1,
-    points_to_asker: 0,
-    created_at: new Date(Date.now() - 300000).toISOString(),
-  },
-];
-
 export default function TeamPortalPage() {
-  const [myTeam, setMyTeam] = useState<Team | null>(MOCK_TEAM);
-  const [eventState, setEventState] = useState<EventState | null>(MOCK_EVENT_STATE);
-  const [currentPitch, setCurrentPitch] = useState<(Pitch & { teams?: Team }) | null>(MOCK_CURRENT_PITCH);
-  const [myQuestions, setMyQuestions] = useState<Question[]>(MOCK_QUESTIONS);
+  const [myTeam, setMyTeam] = useState<Team | null>(null);
+  const [eventState, setEventState] = useState<EventState | null>(null);
+  const [currentPitch, setCurrentPitch] = useState<(Pitch & { teams?: Team }) | null>(null);
+  const [nextUpTeam, setNextUpTeam] = useState<Team | null>(null);
+  const [myQuestions, setMyQuestions] = useState<Question[]>([]);
+  const [loadingTeam, setLoadingTeam] = useState(true);
 
   // Rating Sliders (1-5 scale)
   const [problemRel, setProblemRel] = useState<number>(3);
@@ -82,8 +32,8 @@ export default function TeamPortalPage() {
   const [loadingRating, setLoadingRating] = useState(false);
   const [loadingQuestion, setLoadingQuestion] = useState(false);
 
-  const [ratingError, setRatingError] = useState<string | null>(null);
-  const [questionMessage, setQuestionMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+  const [ratingMessage, setRatingMessage] = useState<ToastMessage | null>(null);
+  const [questionMessage, setQuestionMessage] = useState<ToastMessage | null>(null);
 
   const fetchTeamAndEventData = async () => {
     const supabase = createClient();
@@ -96,9 +46,9 @@ export default function TeamPortalPage() {
         .eq('auth_user_id', user.id)
         .single();
 
-      if (team) {
-        setMyTeam(team as Team);
+      setMyTeam((team as Team) || null);
 
+      if (team) {
         // Fetch questions asked by my team
         const { data: qData } = await supabase
           .from('questions')
@@ -106,26 +56,44 @@ export default function TeamPortalPage() {
           .eq('asking_team_id', team.id)
           .order('created_at', { ascending: false });
 
-        if (qData) setMyQuestions(qData as Question[]);
+        setMyQuestions((qData as Question[]) || []);
       }
     }
 
     // Fetch Event State & Current Pitch
     const { data: es } = await supabase.from('event_state').select('*').eq('id', 1).single();
-    if (es) {
-      setEventState(es as EventState);
-      if (es.current_pitch_id) {
-        const { data: pData } = await supabase
-          .from('pitches')
-          .select('*, teams(*)')
-          .eq('id', es.current_pitch_id)
-          .single();
+    setEventState((es as EventState) || null);
+    if (es?.current_pitch_id) {
+      const { data: pData } = await supabase
+        .from('pitches')
+        .select('*, teams(*)')
+        .eq('id', es.current_pitch_id)
+        .single();
 
-        if (pData) setCurrentPitch(pData as any);
-      } else {
-        setCurrentPitch(null);
-      }
+      setCurrentPitch((pData as any) || null);
+    } else {
+      setCurrentPitch(null);
     }
+
+    // Who's next in the queue, so waiting teams know when to prepare.
+    const { data: queuedPitches } = await supabase
+      .from('pitches')
+      .select('team_id, pitch_order, queue_position_override, teams(*)')
+      .eq('queue_status', 'queued')
+      .order('pitch_order', { ascending: true });
+
+    if (queuedPitches && queuedPitches.length > 0) {
+      const sorted = [...queuedPitches].sort((a: any, b: any) => {
+        const aKey = a.queue_position_override ?? a.pitch_order;
+        const bKey = b.queue_position_override ?? b.pitch_order;
+        return aKey - bKey;
+      });
+      setNextUpTeam((sorted[0] as any)?.teams || null);
+    } else {
+      setNextUpTeam(null);
+    }
+
+    setLoadingTeam(false);
   };
 
   useEffect(() => {
@@ -153,7 +121,7 @@ export default function TeamPortalPage() {
     e.preventDefault();
     if (!currentPitch) return;
     setLoadingRating(true);
-    setRatingError(null);
+    setRatingMessage(null);
 
     const res = await submitAudienceRatingAction({
       pitchId: currentPitch.id,
@@ -168,7 +136,7 @@ export default function TeamPortalPage() {
 
     setLoadingRating(false);
     if (res.error) {
-      setRatingError(res.error);
+      setRatingMessage({ type: 'error', text: res.error });
     } else {
       setRatingSubmitted(true);
     }
@@ -195,8 +163,22 @@ export default function TeamPortalPage() {
     }
   };
 
+  if (loadingTeam) {
+    return (
+      <div className="min-h-screen flex flex-col" data-density="dense">
+        <Navbar userRole="team" />
+        <main className="flex-1 flex items-center justify-center">
+          <div className="text-center space-y-3">
+            <div className="w-8 h-8 border-4 border-brand-500 border-t-transparent rounded-full animate-spin mx-auto" />
+            <p className="text-sm text-text-secondary font-mono">Loading your team...</p>
+          </div>
+        </main>
+      </div>
+    );
+  }
+
   return (
-    <div className="min-h-screen flex flex-col bg-background text-gray-100">
+    <div className="min-h-screen flex flex-col" data-density="dense">
       <Navbar userRole="team" teamName={myTeam?.team_name} />
 
       <main className="flex-1 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8 w-full">
@@ -204,35 +186,51 @@ export default function TeamPortalPage() {
         <CountdownTimer initialState={eventState || undefined} />
 
         {/* BIG NOW PITCHING BANNER */}
-        <div className="glass-panel rounded-3xl p-6 sm:p-8 border border-surface-border text-center space-y-4 relative overflow-hidden">
-          <div className="absolute top-0 right-0 w-64 h-64 bg-brand-cyan/10 rounded-full blur-3xl pointer-events-none" />
-
-          <div className="inline-flex items-center space-x-2 px-3 py-1 rounded-full bg-red-500/20 text-red-400 border border-red-500/40 text-xs font-extrabold tracking-widest uppercase">
-            <Flame className="w-4 h-4 animate-pulse" />
+        <div className="panel rounded-3xl p-6 sm:p-8 text-center space-y-4 relative overflow-hidden">
+          <div className="inline-flex items-center space-x-2 px-3 py-1 rounded-full bg-accent-live/15 text-accent-live border border-accent-live/40 text-xs font-extrabold tracking-widest uppercase">
+            <Flame className="w-4 h-4" />
             <span>NOW PITCHING LIVE</span>
           </div>
 
           {currentPitch && pitchingTeam ? (
             <div className="space-y-2">
-              <h1 className="text-3xl sm:text-5xl font-black text-white tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-white via-cyan-100 to-brand-cyan">
+              <h1 className="font-display text-3xl sm:text-5xl font-bold text-text-primary tracking-tight">
                 {pitchingTeam.team_name}
               </h1>
-              <div className="flex items-center justify-center space-x-4 text-xs sm:text-sm text-gray-300">
-                <span className="px-3 py-1 rounded-lg bg-gray-800 border border-gray-700 font-bold">
-                  Domain: <span className="text-brand-gold">{pitchingTeam.domain}</span>
+              <div className="flex items-center justify-center space-x-4 text-xs sm:text-sm text-text-secondary">
+                <span className="px-3 py-1 rounded-lg bg-white/5 border border-panel-border font-bold">
+                  Domain: <span className="text-accent-warm">{pitchingTeam.domain}</span>
                 </span>
-                <span className="px-3 py-1 rounded-lg bg-gray-800 border border-gray-700 font-bold">
-                  Pool <span className="text-brand-cyan">{pitchingTeam.pool}</span>
+                <span className="px-3 py-1 rounded-lg bg-white/5 border border-panel-border font-bold">
+                  Pool <span className="text-brand-500">{pitchingTeam.pool}</span>
                 </span>
               </div>
             </div>
           ) : (
             <div className="py-6 space-y-2">
-              <h2 className="text-2xl font-bold text-gray-400">Waiting for next pitch to begin...</h2>
-              <p className="text-xs text-gray-500">The Organiser will set the live pitching team shortly.</p>
+              <h2 className="text-2xl font-bold text-text-secondary">Waiting for next pitch to begin...</h2>
+              <p className="text-xs text-text-secondary/70">The Organiser will set the live pitching team shortly.</p>
             </div>
           )}
         </div>
+
+        {/* NEXT UP INDICATOR */}
+        {nextUpTeam && (
+          <div className={`card rounded-2xl p-4 flex items-center justify-between gap-3 ${
+            myTeam && nextUpTeam.id === myTeam.id ? 'border-accent-warm/50 bg-accent-warm/10' : ''
+          }`}>
+            <div>
+              <span className="text-[10px] uppercase tracking-wider text-text-secondary font-mono block">Next Up</span>
+              <p className="text-sm font-bold text-text-primary">
+                {nextUpTeam.team_name}
+                {myTeam && nextUpTeam.id === myTeam.id && (
+                  <span className="ml-2 text-accent-warm">— that&apos;s you, get ready!</span>
+                )}
+              </p>
+            </div>
+            <PoolBadge pool={nextUpTeam.pool} className="shrink-0" />
+          </div>
+        )}
 
         {/* AUDIENCE VOTING & QUESTION SUBMISSION PANEL */}
         {currentPitch && pitchingTeam && (
@@ -240,33 +238,29 @@ export default function TeamPortalPage() {
             {canVote ? (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                 {/* 5-CRITERIA SLIDERS FORM */}
-                <div className="glass-card rounded-2xl p-6 border border-surface-border space-y-5">
+                <div className="card rounded-2xl p-6 space-y-5">
                   <div className="flex items-center space-x-3">
-                    <Trophy className="w-5 h-5 text-brand-gold" />
+                    <Trophy className="w-5 h-5 text-accent-warm" />
                     <div>
-                      <h3 className="text-lg font-bold text-white">Rate Rivals&apos; Pitch</h3>
-                      <p className="text-xs text-gray-400">Evaluate {pitchingTeam.team_name} (Pool {pitchingTeam.pool}) on 1–5 scale</p>
+                      <h3 className="text-lg font-bold text-text-primary">Rate Rivals&apos; Pitch</h3>
+                      <p className="text-xs text-text-secondary">Evaluate {pitchingTeam.team_name} (Pool {pitchingTeam.pool}) on 1–5 scale</p>
                     </div>
                   </div>
 
-                  {ratingError && (
-                    <div className="p-3 rounded-lg text-xs font-semibold bg-red-500/20 text-red-300 border border-red-500/40">
-                      {ratingError}
-                    </div>
-                  )}
+                  <Toast message={ratingMessage} />
 
                   {ratingSubmitted ? (
-                    <div className="p-6 text-center space-y-3 bg-emerald-500/10 border border-emerald-500/30 rounded-xl">
-                      <CheckCircle2 className="w-10 h-10 text-emerald-400 mx-auto" />
-                      <h4 className="font-bold text-white text-base">Rating Submitted!</h4>
-                      <p className="text-xs text-gray-300">Your scores have been included in the normalized audience rating view.</p>
+                    <div className="p-6 text-center space-y-3 bg-success-500/10 border border-success-500/30 rounded-xl">
+                      <CheckCircle2 className="w-10 h-10 text-success-500 mx-auto" />
+                      <h4 className="font-bold text-text-primary text-base">Rating Submitted!</h4>
+                      <p className="text-xs text-text-secondary">Your scores have been included in the normalized audience rating view.</p>
                     </div>
                   ) : (
                     <form onSubmit={handleRatingSubmit} className="space-y-4">
                       <div>
-                        <div className="flex justify-between text-xs font-medium text-gray-300 mb-1">
+                        <div className="flex justify-between text-xs font-medium text-text-secondary mb-1">
                           <span>Problem Relevance</span>
-                          <span className="font-bold text-brand-cyan">{problemRel} / 5</span>
+                          <span className="font-bold text-brand-500">{problemRel} / 5</span>
                         </div>
                         <input
                           type="range"
@@ -274,14 +268,14 @@ export default function TeamPortalPage() {
                           max="5"
                           value={problemRel}
                           onChange={(e) => setProblemRel(Number(e.target.value))}
-                          className="w-full accent-brand-cyan"
+                          className="w-full accent-brand-500"
                         />
                       </div>
 
                       <div>
-                        <div className="flex justify-between text-xs font-medium text-gray-300 mb-1">
+                        <div className="flex justify-between text-xs font-medium text-text-secondary mb-1">
                           <span>Creativity & Originality</span>
-                          <span className="font-bold text-brand-cyan">{creativity} / 5</span>
+                          <span className="font-bold text-brand-500">{creativity} / 5</span>
                         </div>
                         <input
                           type="range"
@@ -289,14 +283,14 @@ export default function TeamPortalPage() {
                           max="5"
                           value={creativity}
                           onChange={(e) => setCreativity(Number(e.target.value))}
-                          className="w-full accent-brand-cyan"
+                          className="w-full accent-brand-500"
                         />
                       </div>
 
                       <div>
-                        <div className="flex justify-between text-xs font-medium text-gray-300 mb-1">
+                        <div className="flex justify-between text-xs font-medium text-text-secondary mb-1">
                           <span>Solution Quality</span>
-                          <span className="font-bold text-brand-cyan">{solQuality} / 5</span>
+                          <span className="font-bold text-brand-500">{solQuality} / 5</span>
                         </div>
                         <input
                           type="range"
@@ -304,14 +298,14 @@ export default function TeamPortalPage() {
                           max="5"
                           value={solQuality}
                           onChange={(e) => setSolQuality(Number(e.target.value))}
-                          className="w-full accent-brand-cyan"
+                          className="w-full accent-brand-500"
                         />
                       </div>
 
                       <div>
-                        <div className="flex justify-between text-xs font-medium text-gray-300 mb-1">
+                        <div className="flex justify-between text-xs font-medium text-text-secondary mb-1">
                           <span>Pitch Quality & Clad</span>
-                          <span className="font-bold text-brand-cyan">{pitchQuality} / 5</span>
+                          <span className="font-bold text-brand-500">{pitchQuality} / 5</span>
                         </div>
                         <input
                           type="range"
@@ -319,14 +313,14 @@ export default function TeamPortalPage() {
                           max="5"
                           value={pitchQuality}
                           onChange={(e) => setPitchQuality(Number(e.target.value))}
-                          className="w-full accent-brand-cyan"
+                          className="w-full accent-brand-500"
                         />
                       </div>
 
                       <div>
-                        <div className="flex justify-between text-xs font-medium text-gray-300 mb-1">
+                        <div className="flex justify-between text-xs font-medium text-text-secondary mb-1">
                           <span>Overall Potential</span>
-                          <span className="font-bold text-brand-cyan">{overallPot} / 5</span>
+                          <span className="font-bold text-brand-500">{overallPot} / 5</span>
                         </div>
                         <input
                           type="range"
@@ -334,14 +328,14 @@ export default function TeamPortalPage() {
                           max="5"
                           value={overallPot}
                           onChange={(e) => setOverallPot(Number(e.target.value))}
-                          className="w-full accent-brand-cyan"
+                          className="w-full accent-brand-500"
                         />
                       </div>
 
                       <button
                         type="submit"
                         disabled={loadingRating}
-                        className="w-full py-2.5 rounded-xl font-bold text-xs bg-brand-cyan hover:bg-brand-cyan/90 text-black transition-colors shadow-cyan-glow"
+                        className="w-full py-2.5 rounded-xl font-bold text-xs bg-brand-500 hover:bg-brand-500/90 text-white transition-colors shadow-brand-glow"
                       >
                         {loadingRating ? 'Submitting...' : 'Submit Audience Rating'}
                       </button>
@@ -350,44 +344,34 @@ export default function TeamPortalPage() {
                 </div>
 
                 {/* QUESTION SUBMISSION FORM */}
-                <div className="glass-card rounded-2xl p-6 border border-surface-border space-y-5">
+                <div className="card rounded-2xl p-6 space-y-5">
                   <div className="flex items-center space-x-3">
-                    <HelpCircle className="w-5 h-5 text-brand-pink" />
+                    <HelpCircle className="w-5 h-5 text-accent-live" />
                     <div>
-                      <h3 className="text-lg font-bold text-white">Pressure Test Q&A</h3>
-                      <p className="text-xs text-gray-400">Submit a challenging question for {pitchingTeam.team_name}</p>
+                      <h3 className="text-lg font-bold text-text-primary">Pressure Test Q&A</h3>
+                      <p className="text-xs text-text-secondary">Submit a challenging question for {pitchingTeam.team_name}</p>
                     </div>
                   </div>
 
-                  {questionMessage && (
-                    <div
-                      className={`p-3 rounded-lg text-xs font-semibold border ${
-                        questionMessage.type === 'success'
-                          ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/40'
-                          : 'bg-red-500/20 text-red-300 border-red-500/40'
-                      }`}
-                    >
-                      {questionMessage.text}
-                    </div>
-                  )}
+                  <Toast message={questionMessage} />
 
                   <form onSubmit={handleQuestionSubmit} className="space-y-4">
                     <div>
-                      <label className="block text-xs font-medium text-gray-300 mb-1">Your Question</label>
+                      <label className="block text-xs font-medium text-text-secondary mb-1">Your Question</label>
                       <textarea
                         required
                         rows={4}
                         placeholder="Ask about unit economics, technical feasibility, scalability..."
                         value={questionText}
                         onChange={(e) => setQuestionText(e.target.value)}
-                        className="w-full bg-gray-900 border border-gray-700 rounded-xl p-3 text-xs text-white focus:outline-none focus:border-brand-pink transition-colors"
+                        className="w-full bg-white/5 border border-panel-border rounded-xl p-3 text-xs text-text-primary focus:outline-none focus:border-accent-live transition-colors"
                       />
                     </div>
 
                     <button
                       type="submit"
                       disabled={loadingQuestion}
-                      className="w-full py-2.5 rounded-xl font-bold text-xs bg-brand-pink hover:bg-brand-pink/90 text-white transition-colors shadow-purple-glow flex items-center justify-center space-x-2"
+                      className="w-full py-2.5 rounded-xl font-bold text-xs bg-accent-live hover:bg-accent-live/90 text-white transition-colors shadow-live-glow flex items-center justify-center space-x-2"
                     >
                       <Send className="w-3.5 h-3.5" />
                       <span>{loadingQuestion ? 'Submitting Question...' : 'Submit Question for Review'}</span>
@@ -396,10 +380,10 @@ export default function TeamPortalPage() {
                 </div>
               </div>
             ) : (
-              <div className="glass-card rounded-2xl p-6 border border-surface-border text-center space-y-2">
-                <ShieldAlert className="w-8 h-8 text-amber-400 mx-auto" />
-                <h3 className="text-base font-bold text-gray-200">Voting Restricted for this Pitch</h3>
-                <p className="text-xs text-gray-400 max-w-md mx-auto">
+              <div className="card rounded-2xl p-6 text-center space-y-2">
+                <ShieldAlert className="w-8 h-8 text-accent-warm mx-auto" />
+                <h3 className="text-base font-bold text-text-primary">Voting Restricted for this Pitch</h3>
+                <p className="text-xs text-text-secondary max-w-md mx-auto">
                   {isOwnTeam
                     ? 'This is your own team pitching! You cannot rate or ask questions on your own pitch.'
                     : `You are in Pool ${myTeam?.pool} alongside ${pitchingTeam.team_name}. Audience voting is only allowed for teams pitching from the opposite pool.`}
@@ -413,32 +397,32 @@ export default function TeamPortalPage() {
         <LiveLeaderboard roundName="prelim" />
 
         {/* YOUR TEAM'S JOURNEY SUMMARY */}
-        <div className="glass-card rounded-2xl p-6 border border-surface-border space-y-4">
-          <h3 className="text-lg font-bold text-white flex items-center space-x-2">
-            <Users className="w-5 h-5 text-brand-cyan" />
+        <div className="card rounded-2xl p-6 space-y-4">
+          <h3 className="text-lg font-bold text-text-primary flex items-center space-x-2">
+            <Users className="w-5 h-5 text-brand-500" />
             <span>Your Team&apos;s Event Journey</span>
           </h3>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="bg-gray-900/60 p-4 rounded-xl border border-gray-800 space-y-2">
-              <span className="text-xs font-bold text-gray-300 uppercase tracking-wider block">Assigned Team Details</span>
-              <p className="text-xs text-gray-400">Team Name: <span className="text-white font-bold">{myTeam?.team_name}</span></p>
-              <p className="text-xs text-gray-400">Sector Domain: <span className="text-brand-gold font-bold">{myTeam?.domain}</span></p>
-              <p className="text-xs text-gray-400">Assigned Pool: <span className="text-brand-cyan font-bold">Pool {myTeam?.pool}</span></p>
+            <div className="bg-white/[0.03] p-4 rounded-xl border border-panel-border space-y-2">
+              <span className="text-xs font-bold text-text-secondary uppercase tracking-wider block">Assigned Team Details</span>
+              <p className="text-xs text-text-secondary">Team Name: <span className="text-text-primary font-bold">{myTeam?.team_name}</span></p>
+              <p className="text-xs text-text-secondary">Sector Domain: <span className="text-accent-warm font-bold">{myTeam?.domain}</span></p>
+              <p className="text-xs text-text-secondary">Assigned Pool: <span className="text-brand-500 font-bold">Pool {myTeam?.pool}</span></p>
             </div>
 
-            <div className="bg-gray-900/60 p-4 rounded-xl border border-gray-800 space-y-2">
-              <span className="text-xs font-bold text-gray-300 uppercase tracking-wider block">Questions Asked ({myQuestions.length})</span>
+            <div className="bg-white/[0.03] p-4 rounded-xl border border-panel-border space-y-2">
+              <span className="text-xs font-bold text-text-secondary uppercase tracking-wider block">Questions Asked ({myQuestions.length})</span>
               {myQuestions.length === 0 ? (
-                <p className="text-xs text-gray-500">No questions submitted yet.</p>
+                <p className="text-xs text-text-secondary/70">No questions submitted yet.</p>
               ) : (
                 <div className="space-y-2 max-h-36 overflow-y-auto pr-1">
                   {myQuestions.map((q) => (
-                    <div key={q.id} className="p-2 rounded bg-gray-950 text-xs border border-gray-800">
-                      <p className="text-gray-200 line-clamp-2">{q.question_text}</p>
-                      <div className="flex items-center justify-between text-[10px] text-gray-400 mt-1">
-                        <span>Status: <strong className="text-brand-cyan uppercase">{q.status}</strong></span>
-                        {q.points_to_asker > 0 && <span className="text-brand-gold font-bold">+{q.points_to_asker} pts earned</span>}
+                    <div key={q.id} className="p-2 rounded bg-black/20 text-xs border border-panel-border">
+                      <p className="text-text-primary line-clamp-2">{q.question_text}</p>
+                      <div className="flex items-center justify-between text-[10px] text-text-secondary mt-1">
+                        <span>Status: <strong className="text-brand-500 uppercase">{q.status}</strong></span>
+                        {q.points_to_asker > 0 && <span className="text-accent-warm font-bold">+{q.points_to_asker} pts earned</span>}
                       </div>
                     </div>
                   ))}

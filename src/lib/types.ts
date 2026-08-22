@@ -38,12 +38,16 @@ export interface Round {
   order_num: number;
 }
 
+export type QueueStatus = 'queued' | 'called' | 'pitching' | 'awaiting_score' | 'scored';
+
 export interface Pitch {
   id: string;
   team_id: string;
   round_id: string;
   status: 'upcoming' | 'live' | 'done';
+  queue_status: QueueStatus;
   pitch_order: number;
+  queue_position_override: number | null;
   started_at?: string | null;
   ended_at?: string | null;
   created_at?: string;
@@ -72,6 +76,21 @@ export interface JudgeScore {
   score: number; // 1-10
   locked: boolean;
   created_at?: string;
+}
+
+// Authoritative, single-row-per-pitch score. Whichever judge or organiser
+// account submits first locks the pitch — no multi-judge averaging.
+export interface PitchScore {
+  id: string;
+  pitch_id: string;
+  problem_market_score: number; // 0-20
+  solution_innovation_score: number; // 0-20
+  feasibility_score: number; // 0-15
+  pitch_storytelling_score: number; // 0-15
+  submitted_by: string | null;
+  submitted_by_name: string | null;
+  submitted_at: string;
+  locked: boolean;
 }
 
 export type AudienceCriterion = 
@@ -106,13 +125,13 @@ export interface Question {
   asking_team?: Team;
 }
 
-export type TimerPhase = 'idle' | 'prep' | 'pitch' | 'qa' | 'paused';
+export type TimerStatus = 'idle' | 'running' | 'paused' | 'ended';
 
 export interface EventState {
   id: number;
   current_pitch_id: string | null;
   current_round_id: string | null;
-  timer_phase: TimerPhase;
+  timer_status: TimerStatus;
   timer_duration_seconds: number;
   timer_started_at: string | null;
   timer_paused_remaining: number | null;
@@ -140,16 +159,21 @@ export interface PitchLeaderboardEntry {
   round_id: string;
   round_name: string;
   pitch_status: 'upcoming' | 'live' | 'done';
-  
+  queue_status: QueueStatus;
+  pitch_order: number;
+  queue_position_override: number | null;
+
   problem_market_score: number;
   solution_innovation_score: number;
   feasibility_score: number;
   pitch_storytelling_score: number;
   audience_rating_score: number;
   qa_pressure_score: number;
-  
+
   judges_submitted_count: number;
+  submitted_by_name: string | null;
   total_voters: number;
   total_qa_points: number;
-  total_weighted_score: number;
+  // Null until a judge has actually submitted a score for this pitch.
+  total_weighted_score: number | null;
 }
