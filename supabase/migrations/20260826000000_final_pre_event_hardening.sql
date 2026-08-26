@@ -3,17 +3,106 @@
 -- This migration documents and fixes the LIVE production schema, which had
 -- drifted significantly from what's captured in the committed migration
 -- files (20260809000000 initial_schema.sql etc. describe an EARLIER shape
--- of this schema — pitch_scores, queue_status, timer_status, results_revealed,
--- domains.assigned_count, otp_request_log, and the current RLS policies were
--- all added directly against the live Supabase project without ever being
--- captured as a migration file). Everything below was written by
--- introspecting the live DB via its REST/OpenAPI schema and behavioral
--- testing, NOT by reading a prior migration, since none exists for it.
+-- of this schema). Sections 0 and 0b below are RECONSTRUCTED from the live
+-- schema's REST/OpenAPI spec and behavioral testing (no direct Postgres
+-- access was available to read the real DDL) -- they are best-effort
+-- reconciliation so future migrations have an accurate starting point, not
+-- a byte-for-byte dump of the live database. Every CREATE/ALTER below is
+-- defensive (IF EXISTS / IF NOT EXISTS) so it's safe to run even where the
+-- underlying object already exists from prior manual dashboard changes.
 --
--- Run this against the SAME project the app already talks to. Every
--- statement is defensive (IF EXISTS / CREATE OR REPLACE / idempotent
--- upserts) so it is safe to run even though most of the underlying
--- objects already exist from manual dashboard changes.
+-- IMPORTANT — RLS POLICY CAVEAT: sections 0/0b intentionally do NOT attempt
+-- to restate the exact CREATE POLICY statements currently live on teams,
+-- team_members, questions, audience_scores, pitch_scores, or event_state.
+-- Those were only verified BEHAVIORALLY in this session (raw API calls
+-- confirming e.g. cross-pool voting is accepted and same-pool is rejected)
+-- -- their exact SQL text was never read, since that requires a direct
+-- Postgres connection (pg_policies), which wasn't available. Section 5
+-- below only touches the one policy this session's testing proved was
+-- actually wrong (pitch_scores' public-read policy) plus a defensive
+-- RLS-enabled re-assertion. Treat every OTHER existing policy as
+-- untouched/authoritative on the live DB — this migration does not
+-- attempt to redefine them, to avoid overwriting a correct-but-undocumented
+-- policy with a guessed one.
+
+-- ============================================================
+-- 0. RECONCILE SCHEMA: columns/tables that exist live but were never
+--    captured in any committed migration. All additive/defensive.
+-- ============================================================
+
+-- pitches: queue/timer-model columns added during the judge-panel-overhaul
+-- work, never captured in a migration.
+ALTER TABLE public.pitches
+  ADD COLUMN IF NOT EXISTS queue_status TEXT NOT NULL DEFAULT 'queued',
+  ADD COLUMN IF NOT EXISTS queue_position_override INT;
+
+-- event_state: timer model was renamed from timer_phase (idle/prep/pitch/
+-- qa/paused) to timer_status (idle/running/paused/ended), and a
+-- results_revealed flag was added for gating the Final-4 reveal moment.
+ALTER TABLE public.event_state
+  ADD COLUMN IF NOT EXISTS timer_status TEXT NOT NULL DEFAULT 'idle',
+  ADD COLUMN IF NOT EXISTS results_revealed BOOLEAN NOT NULL DEFAULT false;
+
+-- questions: points_to_team/points_to_asker (original migration) were
+-- renamed to points_pitching/points_asking live.
+ALTER TABLE public.questions
+  ADD COLUMN IF NOT EXISTS points_pitching INT NOT NULL DEFAULT 0,
+  ADD COLUMN IF NOT EXISTS points_asking INT NOT NULL DEFAULT 0;
+
+-- domains: a per-domain assignment counter was added live. Not currently
+-- read or written by any app code (registerTeamAction still picks a
+-- uniformly random domain) -- captured here for schema completeness only;
+-- see the note in the final summary about whether this is meant to be
+-- wired up or is dead weight to drop later.
+ALTER TABLE public.domains
+  ADD COLUMN IF NOT EXISTS assigned_count INT NOT NULL DEFAULT 0;
+
+-- pitch_scores: the single-authoritative-score-per-pitch table added by
+-- the judge-panel-overhaul work, replacing the original per-judge/
+-- per-criterion judge_scores model (judge_scores table still exists live
+-- but is unused by current app code -- left in place, not dropped, in
+-- case historical rows matter).
+CREATE TABLE IF NOT EXISTS public.pitch_scores (
+  id UUID PRIMARY KEY DEFAULT extensions.uuid_generate_v4(),
+  pitch_id UUID NOT NULL REFERENCES public.pitches(id) ON DELETE CASCADE,
+  submitted_by UUID REFERENCES public.profiles(id) ON DELETE SET NULL,
+  submitted_by_name TEXT,
+  submitted_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  locked BOOLEAN NOT NULL DEFAULT true,
+  problem_market_raw INT NOT NULL,
+  solution_innovation_raw INT NOT NULL,
+  feasibility_raw INT NOT NULL,
+  pitch_storytelling_raw INT NOT NULL,
+  CONSTRAINT pitch_scores_pitch_id_unique UNIQUE (pitch_id)
+);
+
+-- otp_request_log: rate-limits repeated OTP requests per email. Exists
+-- live, not currently read/written by any app code in this repo (no
+-- rate-limit check calls it) -- captured for schema completeness; flagged
+-- in the summary as a possible half-finished feature worth wiring up or
+-- removing.
+CREATE TABLE IF NOT EXISTS public.otp_request_log (
+  email TEXT PRIMARY KEY,
+  last_requested_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+ALTER TABLE public.pitch_scores ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.otp_request_log ENABLE ROW LEVEL SECURITY;
+
+-- ============================================================
+-- 0b. NOTE ON UNCAPTURED TRIGGERS: app code comments reference a
+--    trg_create_prelim_pitch_for_team trigger (fires on team insert to
+--    auto-create that team's prelim-round pitch row) which clearly exists
+--    live (every registered team has exactly one prelim pitch), but its
+--    exact function body was never read -- introspecting a trigger
+--    definition requires pg_proc/pg_trigger access via a direct Postgres
+--    connection, which wasn't available this session either. NOT
+--    recreated here to avoid DROP/replacing a working trigger with a
+--    guessed one. If you ever need to rebuild this project from scratch
+--    (not just apply forward migrations to the existing live DB), you
+--    will need to pull this trigger's definition via the SQL Editor's
+--    schema view first.
+-- ============================================================
 
 -- ============================================================
 -- 1. FIX: pitch_leaderboard view was NOT applying the 10% weight to the
@@ -26,16 +115,26 @@
 --    documented 20/20/15/15/20/10 weights) = 59.5, a discrepancy of
 --    exactly the un-weighted qa_pressure_score (10) added at 100% instead
 --    of 10%.
+--
+--    NOTE: the first attempt at this migration used CREATE OR REPLACE VIEW,
+--    which Postgres rejects when a column's data type changes ("cannot
+--    change data type of view column ... from numeric to integer") --
+--    the live view's score columns are numeric, and an early draft of this
+--    fix produced integer expressions instead. Using DROP VIEW + CREATE
+--    VIEW instead, with explicit ::numeric casts, avoids that entirely.
 -- ============================================================
-CREATE OR REPLACE VIEW public.pitch_leaderboard AS
+DROP VIEW IF EXISTS public.pitch_leaderboard;
+
+CREATE VIEW public.pitch_leaderboard
+WITH (security_invoker = true) AS
 WITH
 judge_component AS (
   SELECT
     p.id AS pitch_id,
-    COALESCE(ps.problem_market_raw, 0) * 5 AS problem_market_score,       -- raw is 0-20, view exposes 0-100
-    COALESCE(ps.solution_innovation_raw, 0) * 5 AS solution_innovation_score,
-    COALESCE(ps.feasibility_raw, 0) * (100.0/15) AS feasibility_score,     -- raw is 0-15, scale to 0-100
-    COALESCE(ps.pitch_storytelling_raw, 0) * (100.0/15) AS pitch_storytelling_score,
+    (COALESCE(ps.problem_market_raw, 0) * 5)::numeric AS problem_market_score,       -- raw is 0-20, view exposes 0-100
+    (COALESCE(ps.solution_innovation_raw, 0) * 5)::numeric AS solution_innovation_score,
+    (COALESCE(ps.feasibility_raw, 0) * (100.0/15))::numeric AS feasibility_score,     -- raw is 0-15, scale to 0-100
+    (COALESCE(ps.pitch_storytelling_raw, 0) * (100.0/15))::numeric AS pitch_storytelling_score,
     CASE WHEN ps.id IS NOT NULL THEN 1 ELSE 0 END AS judges_submitted_count,
     ps.submitted_by_name
   FROM public.pitches p
@@ -54,7 +153,7 @@ voter_pitch_averages AS (
 audience_component AS (
   SELECT
     p.id AS pitch_id,
-    COALESCE(AVG(vpa.voter_normalized_score), 0) AS audience_rating_score,
+    COALESCE(AVG(vpa.voter_normalized_score), 0)::numeric AS audience_rating_score,
     COUNT(DISTINCT vpa.voting_team_id) AS total_voters
   FROM public.pitches p
   LEFT JOIN voter_pitch_averages vpa ON vpa.pitch_id = p.id
@@ -64,7 +163,7 @@ audience_component AS (
 qa_component AS (
   SELECT
     p.id AS pitch_id,
-    LEAST(GREATEST(50 + COALESCE(SUM(q.points_pitching), 0) * 10, 0), 100) AS qa_pressure_score,
+    LEAST(GREATEST(50 + COALESCE(SUM(q.points_pitching), 0) * 10, 0), 100)::numeric AS qa_pressure_score,
     COALESCE(SUM(q.points_pitching), 0) AS total_qa_points
   FROM public.pitches p
   LEFT JOIN public.questions q ON q.pitch_id = p.id AND q.status = 'approved'
@@ -118,86 +217,18 @@ JOIN public.rounds r ON r.id = p.round_id
 JOIN judge_component jc ON jc.pitch_id = p.id
 JOIN audience_component ac ON ac.pitch_id = p.id
 JOIN qa_component qc ON qc.pitch_id = p.id
-ORDER BY total_weighted_score DESC NULLS LAST;
-
--- ============================================================
--- 2. FIX: pitch_leaderboard was readable by the unauthenticated `anon` role
---    with no login at all (confirmed via a raw REST request using only the
---    public anon key). Since a Postgres VIEW does not carry its own RLS —
---    it runs with the privileges of the underlying tables for the querying
---    role — the fix is to revoke the PostgREST-default anon/authenticated
---    SELECT grant on the view and re-grant SELECT only to authenticated
---    users whose profile role is judge or organiser (see also fix #4,
---    section 10, for team-role restriction specifically).
--- ============================================================
-REVOKE ALL ON public.pitch_leaderboard FROM anon;
-REVOKE ALL ON public.pitch_leaderboard FROM authenticated;
-GRANT SELECT ON public.pitch_leaderboard TO authenticated;
-
--- Row-level security cannot be attached directly to a view in Postgres in a
--- way PostgREST enforces per-row, so we wrap the view's access with a
--- SECURITY DEFINER function-backed check via a thin gate table policy isn't
--- applicable here since pitch_leaderboard has no table of its own. Instead,
--- enforce role-based access at the view definition itself by folding the
--- caller's role into the WHERE clause: only judges/organisers, ever.
-CREATE OR REPLACE VIEW public.pitch_leaderboard
-WITH (security_invoker = true) AS
-WITH
-judge_component AS (
-  SELECT
-    p.id AS pitch_id,
-    COALESCE(ps.problem_market_raw, 0) * 5 AS problem_market_score,
-    COALESCE(ps.solution_innovation_raw, 0) * 5 AS solution_innovation_score,
-    COALESCE(ps.feasibility_raw, 0) * (100.0/15) AS feasibility_score,
-    COALESCE(ps.pitch_storytelling_raw, 0) * (100.0/15) AS pitch_storytelling_score,
-    CASE WHEN ps.id IS NOT NULL THEN 1 ELSE 0 END AS judges_submitted_count,
-    ps.submitted_by_name
-  FROM public.pitches p
-  LEFT JOIN public.pitch_scores ps ON ps.pitch_id = p.id
-),
-voter_pitch_averages AS (
-  SELECT pitch_id, voting_team_id, (AVG(score) - 1.0) / 4.0 * 100.0 AS voter_normalized_score
-  FROM public.audience_scores
-  GROUP BY pitch_id, voting_team_id
-),
-audience_component AS (
-  SELECT
-    p.id AS pitch_id,
-    COALESCE(AVG(vpa.voter_normalized_score), 0) AS audience_rating_score,
-    COUNT(DISTINCT vpa.voting_team_id) AS total_voters
-  FROM public.pitches p
-  LEFT JOIN voter_pitch_averages vpa ON vpa.pitch_id = p.id
-  GROUP BY p.id
-),
-qa_component AS (
-  SELECT
-    p.id AS pitch_id,
-    LEAST(GREATEST(50 + COALESCE(SUM(q.points_pitching), 0) * 10, 0), 100) AS qa_pressure_score,
-    COALESCE(SUM(q.points_pitching), 0) AS total_qa_points
-  FROM public.pitches p
-  LEFT JOIN public.questions q ON q.pitch_id = p.id AND q.status = 'approved'
-  GROUP BY p.id
-)
-SELECT
-  t.id AS team_id, t.team_name, t.domain, t.pool,
-  p.id AS pitch_id, r.id AS round_id, r.name AS round_name,
-  p.status AS pitch_status, p.queue_status, p.pitch_order, p.queue_position_override,
-  jc.problem_market_score, jc.solution_innovation_score, jc.feasibility_score,
-  jc.pitch_storytelling_score, ac.audience_rating_score, qc.qa_pressure_score,
-  jc.judges_submitted_count, jc.submitted_by_name, ac.total_voters, qc.total_qa_points,
-  CASE WHEN jc.judges_submitted_count > 0 THEN
-    ROUND(
-      (jc.problem_market_score * 0.20) + (jc.solution_innovation_score * 0.20) +
-      (jc.feasibility_score * 0.15) + (jc.pitch_storytelling_score * 0.15) +
-      (ac.audience_rating_score * 0.20) + (qc.qa_pressure_score * 0.10), 2)
-  ELSE NULL END AS total_weighted_score
-FROM public.pitches p
-JOIN public.teams t ON t.id = p.team_id
-JOIN public.rounds r ON r.id = p.round_id
-JOIN judge_component jc ON jc.pitch_id = p.id
-JOIN audience_component ac ON ac.pitch_id = p.id
-JOIN qa_component qc ON qc.pitch_id = p.id
 WHERE EXISTS (
+  -- ============================================================
+  -- 2. FIX: pitch_leaderboard was readable by the unauthenticated `anon`
+  --    role with no login at all (confirmed via a raw REST request using
+  --    only the public anon key). Folded directly into the view body here
+  --    (rather than a separate GRANT/REVOKE step) since `security_invoker
+  --    = true` above means the view now runs with the QUERYING role's own
+  --    privileges, and this WHERE clause is what actually restricts it to
+  --    judge/organiser profiles — a plain anon or team-role caller gets
+  --    zero rows back, satisfying section 10 (Team Portal must not be able
+  --    to fetch leaderboard/ranking data) at the same time.
+  -- ============================================================
   SELECT 1 FROM public.profiles pr
   WHERE pr.id = auth.uid() AND pr.role IN ('judge', 'organiser')
 )
@@ -215,6 +246,13 @@ REVOKE ALL ON public.pitch_leaderboard FROM anon;
 --    Move the balance decision into a BEFORE INSERT trigger that runs
 --    inside the same transaction as the insert, using a row lock on
 --    event_state to serialize concurrent pool assignments.
+--
+--    NOTE: teams.pool is NOT NULL with no column default on the live DB
+--    (confirmed: an insert omitting pool entirely fails with "null value
+--    in column pool violates not-null constraint" until this trigger
+--    exists). The trigger below fires BEFORE the NOT NULL check and fills
+--    in NEW.pool, so callers (registerTeamAction) should stop specifying
+--    pool at insert time and let this trigger own it exclusively.
 -- ============================================================
 CREATE OR REPLACE FUNCTION public.assign_balanced_pool()
 RETURNS TRIGGER AS $$
@@ -244,32 +282,11 @@ CREATE TRIGGER trg_assign_balanced_pool
   FOR EACH ROW
   EXECUTE FUNCTION public.assign_balanced_pool();
 
--- ============================================================
--- 4. FIX: one person's email could end up on more than one team's
---    team_members roster (confirmed live: two real people each appear as
---    a member of two different teams in different pools), which is the
---    root cause of the dry-run bug where the Team Portal and
---    Organiser/Judge panels appeared to disagree on a person's pool —
---    they were each correctly reading a DIFFERENT team the same person
---    was attached to. A unique index on lower(email) prevents the same
---    email being added as a team_member more than once across ANY team,
---    matching the existing one-team-per-auth-identity rule
---    (teams_auth_user_id_unique) at the member level.
---
---    AS OF 2026-08-26 THIS WILL FAIL TO APPLY: two emails are already
---    duplicated across teams in the live data (both look like dev/test
---    accounts from the dry run: saivardhan1379@gmail.com is on both
---    "eclub test" and "V2X"; ab25chb0b04@student.nitw.ac.in is on both
---    "Idk" and "Archit's team"). Resolve those manually FIRST — decide
---    which team each person actually belongs to, delete their
---    team_members row on the other team (and re-associate/replace that
---    team's roster slot if it needs a real member) — THEN run the
---    CREATE UNIQUE INDEX below. It is deliberately not wrapped in a
---    conditional/deferred form so it fails loudly rather than silently
---    skip protecting against a third occurrence of the same bug.
--- ============================================================
-CREATE UNIQUE INDEX IF NOT EXISTS team_members_email_unique
-  ON public.team_members (lower(email));
+-- NOTE: the team_members email-uniqueness fix (section 4 of this pass) is
+-- deliberately NOT in this file — it depends on manually resolving existing
+-- duplicate rows first. See
+-- 20260826010000_team_members_email_unique.sql, run separately, after that
+-- cleanup is done.
 
 -- ============================================================
 -- 5. Confirm/re-assert RLS is enabled on every table (defensive; some of
@@ -284,6 +301,7 @@ ALTER TABLE public.audience_scores ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.questions ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.domains ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.score_audit_log ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.otp_request_log ENABLE ROW LEVEL SECURITY;
 
 -- pitch_scores: public read was never appropriate once the leaderboard view
 -- became the sanctioned read path; explicit judge/organiser-only read + the
@@ -292,4 +310,14 @@ ALTER TABLE public.score_audit_log ENABLE ROW LEVEL SECURITY;
 DROP POLICY IF EXISTS "Public read pitch scores" ON public.pitch_scores;
 CREATE POLICY "Judge or organiser read pitch_scores" ON public.pitch_scores FOR SELECT USING (
   EXISTS (SELECT 1 FROM public.profiles WHERE id = auth.uid() AND role IN ('judge', 'organiser'))
+);
+
+-- Organiser/service-role need to write pitch_scores from server actions
+-- (submitPitchScoreAction, manualOverrideScoreAction, unlockPitchScoreAction
+-- all use the service-role admin client, which bypasses RLS entirely — this
+-- INSERT/UPDATE/DELETE policy is defense-in-depth for any future direct
+-- client-side write attempt, matching the SELECT policy above).
+DROP POLICY IF EXISTS "Organiser manage pitch_scores" ON public.pitch_scores;
+CREATE POLICY "Organiser manage pitch_scores" ON public.pitch_scores FOR ALL USING (
+  EXISTS (SELECT 1 FROM public.profiles WHERE id = auth.uid() AND role = 'organiser')
 );
