@@ -4,6 +4,7 @@ import Link from 'next/link';
 import dynamic from 'next/dynamic';
 import { motion } from 'framer-motion';
 import Navbar from '@/src/components/Navbar';
+import Footer from '@/src/components/Footer';
 import CountdownTimer from '@/src/components/CountdownTimer';
 import { Flame, Trophy, Users, ShieldAlert, Award, ArrowRight, Zap, Target, MessageSquare } from 'lucide-react';
 import { usePrefersReducedMotion } from '@/src/lib/useReducedMotion';
@@ -123,9 +124,7 @@ export default function LandingPage() {
         </div>
       </main>
 
-      <footer className="border-t border-panel-border py-6 text-center text-xs text-text-secondary font-mono">
-        Pitch Under Pressure • Live Competition Arena • National Institute of Technology Warangal
-      </footer>
+      <Footer />
     </div>
   );
 }

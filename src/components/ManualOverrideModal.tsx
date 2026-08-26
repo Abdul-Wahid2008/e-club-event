@@ -14,7 +14,7 @@ interface ManualOverrideModalProps {
 export default function ManualOverrideModal({ entry, onClose }: ManualOverrideModalProps) {
   const [activeTab, setActiveTab] = useState<'override' | 'unlock'>('override');
   const [tableChanged, setTableChanged] = useState<'pitch_scores' | 'audience_scores' | 'questions'>('pitch_scores');
-  const [category, setCategory] = useState<'problem_market_score' | 'solution_innovation_score' | 'feasibility_score' | 'pitch_storytelling_score'>('problem_market_score');
+  const [category, setCategory] = useState<'problem_market_raw' | 'solution_innovation_raw' | 'feasibility_raw' | 'pitch_storytelling_raw'>('problem_market_raw');
   const [rowId, setRowId] = useState('');
   const [newValue, setNewValue] = useState('');
   const [note, setNote] = useState('');
@@ -133,10 +133,10 @@ export default function ManualOverrideModal({ entry, onClose }: ManualOverrideMo
                   onChange={(e: any) => setCategory(e.target.value)}
                   className="w-full bg-white/5 border border-panel-border rounded-lg px-3 py-2 text-xs text-text-primary focus:outline-none focus:border-brand-500"
                 >
-                  <option value="problem_market_score">Problem & Market (/20)</option>
-                  <option value="solution_innovation_score">Solution & Innovation (/20)</option>
-                  <option value="feasibility_score">Feasibility & Business (/15)</option>
-                  <option value="pitch_storytelling_score">Pitch & Storytelling (/15)</option>
+                  <option value="problem_market_raw">Problem & Market (/20)</option>
+                  <option value="solution_innovation_raw">Solution & Innovation (/20)</option>
+                  <option value="feasibility_raw">Feasibility & Business (/15)</option>
+                  <option value="pitch_storytelling_raw">Pitch & Storytelling (/15)</option>
                 </select>
               </div>
             )}

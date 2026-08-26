@@ -45,12 +45,39 @@ export async function middleware(request: NextRequest) {
 
   // Protect Portal Routes
   if (pathname.startsWith('/portal')) {
+    const staffRoute = pathname.startsWith('/portal/organiser') || pathname.startsWith('/portal/judge');
+
     if (!user) {
-      if (pathname.startsWith('/portal/organiser') || pathname.startsWith('/portal/judge')) {
-        url.pathname = '/auth/staff';
-      } else {
-        url.pathname = '/auth/team';
-      }
+      url.pathname = staffRoute ? '/auth/staff' : '/auth/team';
+      return NextResponse.redirect(url);
+    }
+
+    // ROLE CHECK: being logged in is not enough -- a Team account must not
+    // be able to reach /portal/organiser or /portal/judge just by typing
+    // the URL, and a Judge account must not reach /portal/organiser. The
+    // portal pages themselves are 'use client' components that never
+    // checked the caller's actual role (Navbar's userRole prop is
+    // hardcoded per-page, not derived from the session) -- this was the
+    // only enforcement point, and it never checked role at all before this
+    // fix. Every mutating action was still safe (server actions all call
+    // requireRole independently), but a Team account could directly render
+    // the Judge/Organiser page shells and read data exposed to those
+    // client-side fetches.
+    const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).single();
+    const role = profile?.role;
+
+    if (pathname.startsWith('/portal/organiser') && role !== 'organiser') {
+      url.pathname = role === 'judge' ? '/portal/judge' : role === 'team' ? '/portal/team' : '/auth/staff';
+      return NextResponse.redirect(url);
+    }
+
+    if (pathname.startsWith('/portal/judge') && role !== 'judge' && role !== 'organiser') {
+      url.pathname = role === 'team' ? '/portal/team' : '/auth/staff';
+      return NextResponse.redirect(url);
+    }
+
+    if (pathname.startsWith('/portal/team') && role !== 'team') {
+      url.pathname = role === 'organiser' ? '/portal/organiser' : role === 'judge' ? '/portal/judge' : '/auth/team';
       return NextResponse.redirect(url);
     }
   }

@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import Navbar from '@/src/components/Navbar';
+import Footer from '@/src/components/Footer';
 import Toast, { ToastMessage } from '@/src/components/Toast';
 import { Users, Plus, Trash2, Sparkles, ArrowRight } from 'lucide-react';
 import { registerTeamAction } from '@/src/app/actions/authActions';
@@ -110,7 +111,7 @@ export default function RegisterTeamPage() {
             <div className="space-y-2">
               <h1 className="font-display text-3xl font-bold text-text-primary">Team Successfully Registered!</h1>
               <p className="text-sm text-text-secondary">
-                Welcome <span className="text-brand-500 font-bold">{assignedResult.teamName}</span> to Pitch Under Pressure!
+                Welcome <span className="text-brand-500 font-bold">{assignedResult.teamName}</span> to The Pitch League!
               </p>
             </div>
 
@@ -267,6 +268,7 @@ export default function RegisterTeamPage() {
           </div>
         )}
       </main>
+      <Footer />
     </div>
   );
 }

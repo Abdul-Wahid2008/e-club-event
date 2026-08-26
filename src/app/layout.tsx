@@ -15,8 +15,25 @@ const spaceGrotesk = Space_Grotesk({
 });
 
 export const metadata: Metadata = {
-  title: 'Pitch Under Pressure | NIT Warangal Startup Competition',
+  metadataBase: new URL(process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'),
+  title: 'The Pitch League | NIT Warangal Startup Competition',
   description: 'Live pitch scoring, audience pressure-testing, and real-time event portal for NIT Warangal.',
+  icons: {
+    icon: '/logo-icon.png',
+    apple: '/logo-icon.png',
+  },
+  openGraph: {
+    title: 'The Pitch League',
+    description: 'Live pitch scoring, audience pressure-testing, and real-time event portal for NIT Warangal.',
+    images: ['/logo-icon.png'],
+    type: 'website',
+  },
+  twitter: {
+    card: 'summary_large_image',
+    title: 'The Pitch League',
+    description: 'Live pitch scoring, audience pressure-testing, and real-time event portal for NIT Warangal.',
+    images: ['/logo-icon.png'],
+  },
 };
 
 export default function RootLayout({

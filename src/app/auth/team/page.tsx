@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import Navbar from '@/src/components/Navbar';
+import Footer from '@/src/components/Footer';
 import Toast, { ToastMessage } from '@/src/components/Toast';
 import { Mail, KeyRound, ArrowRight } from 'lucide-react';
 import { requestTeamOtpAction, verifyTeamOtpAction } from '@/src/app/actions/authActions';
@@ -147,6 +148,7 @@ export default function TeamAuthPage() {
           )}
         </div>
       </main>
+      <Footer />
     </div>
   );
 }

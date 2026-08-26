@@ -5,18 +5,21 @@ import Navbar from '@/src/components/Navbar';
 import PitchQueuePanel from '@/src/components/PitchQueuePanel';
 import LiveLeaderboard from '@/src/components/LiveLeaderboard';
 import ManualOverrideModal from '@/src/components/ManualOverrideModal';
+import DataManagementPanel from '@/src/components/DataManagementPanel';
+import ConnectionStatus, { ConnState } from '@/src/components/ConnectionStatus';
 import { triggerConfetti } from '@/src/components/ConfettiEffect';
-import { ShieldAlert, Flame, Users, HelpCircle, Trophy, CheckCircle2, XCircle, Sparkles, FileSpreadsheet } from 'lucide-react';
+import { ShieldAlert, Flame, Users, HelpCircle, Trophy, CheckCircle2, XCircle, Sparkles, FileSpreadsheet, Database } from 'lucide-react';
 import { createClient } from '@/src/lib/supabase/client';
 import { EventState, Pitch, Team, Question, PitchLeaderboardEntry, ScoreAuditLog } from '@/src/lib/types';
 import {
   reviewQuestionAction,
   qualifyFinalFourAction,
   exportRegistrationsCsvAction,
+  exportLeaderboardCsvAction,
 } from '@/src/app/actions/organiserActions';
 
 export default function OrganiserPortalPage() {
-  const [activeTab, setActiveTab] = useState<'control' | 'registrations' | 'questions' | 'leaderboard' | 'audit'>('control');
+  const [activeTab, setActiveTab] = useState<'control' | 'registrations' | 'questions' | 'leaderboard' | 'audit' | 'data'>('control');
 
   const [eventState, setEventState] = useState<EventState | null>(null);
   const [pitches, setPitches] = useState<(Pitch & { teams?: Team })[]>([]);
@@ -26,6 +29,7 @@ export default function OrganiserPortalPage() {
   const [auditLogs, setAuditLogs] = useState<ScoreAuditLog[]>([]);
   const [approvedQuestions, setApprovedQuestions] = useState<Question[]>([]);
   const [loadingData, setLoadingData] = useState(true);
+  const [connState, setConnState] = useState<ConnState>('connecting');
 
   const [selectedOverrideEntry, setSelectedOverrideEntry] = useState<PitchLeaderboardEntry | null>(null);
   const [qualifySuccessMsg, setQualifySuccessMsg] = useState<string | null>(null);
@@ -88,7 +92,11 @@ export default function OrganiserPortalPage() {
       .on('postgres_changes', { event: '*', schema: 'public', table: 'questions' }, () => fetchOrganiserData())
       .on('postgres_changes', { event: '*', schema: 'public', table: 'teams' }, () => fetchOrganiserData())
       .on('postgres_changes', { event: '*', schema: 'public', table: 'score_audit_log' }, () => fetchOrganiserData())
-      .subscribe();
+      .subscribe((status: string) => {
+        if (status === 'SUBSCRIBED') setConnState('connected');
+        else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED') setConnState('reconnecting');
+        else setConnState('connecting');
+      });
 
     return () => {
       supabase.removeChannel(channel);
@@ -118,21 +126,33 @@ export default function OrganiserPortalPage() {
     }
   };
 
+  const downloadCsv = (csv: string, filename: string) => {
+    const csvContent = 'data:text/csv;charset=utf-8,' + csv;
+    const encodedUri = encodeURI(csvContent);
+    const link = document.createElement('a');
+    link.setAttribute('href', encodedUri);
+    link.setAttribute('download', filename);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
   const exportRegistrationsCSV = async () => {
     const res = await exportRegistrationsCsvAction();
     if (res.error || !res.csv) {
       alert(res.error || 'Failed to export CSV.');
       return;
     }
+    downloadCsv(res.csv, `the_pitch_league_teams_${Date.now()}.csv`);
+  };
 
-    const csvContent = 'data:text/csv;charset=utf-8,' + res.csv;
-    const encodedUri = encodeURI(csvContent);
-    const link = document.createElement('a');
-    link.setAttribute('href', encodedUri);
-    link.setAttribute('download', `pitch_under_pressure_teams_${Date.now()}.csv`);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+  const exportLeaderboardCSV = async () => {
+    const res = await exportLeaderboardCsvAction('prelim');
+    if (res.error || !res.csv) {
+      alert(res.error || 'Failed to export leaderboard CSV.');
+      return;
+    }
+    downloadCsv(res.csv, `the_pitch_league_results_${Date.now()}.csv`);
   };
 
   const tabs = [
@@ -141,6 +161,7 @@ export default function OrganiserPortalPage() {
     { key: 'leaderboard' as const, label: 'Live Leaderboard & Overrides', icon: Trophy, badge: null, active: 'bg-accent-warm text-bg-base shadow-warm-glow' },
     { key: 'registrations' as const, label: `Team Registrations (${teams.length})`, icon: Users, badge: null, active: 'bg-brand-500 text-white shadow-brand-glow' },
     { key: 'audit' as const, label: `Score Audit Log (${auditLogs.length})`, icon: ShieldAlert, badge: null, active: 'bg-white/10 text-text-primary' },
+    { key: 'data' as const, label: 'Data Management', icon: Database, badge: null, active: 'bg-danger-500 text-white' },
   ];
 
   if (loadingData) {
@@ -162,6 +183,10 @@ export default function OrganiserPortalPage() {
       <Navbar userRole="organiser" />
 
       <main className="flex-1 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8 w-full">
+        <div className="flex justify-end">
+          <ConnectionStatus state={connState} />
+        </div>
+
         {/* ORGANISER TABS HEADER */}
         <div className="panel rounded-2xl p-2 flex flex-wrap gap-2">
           {tabs.map((tab) => (
@@ -281,11 +306,22 @@ export default function OrganiserPortalPage() {
 
         {/* TAB 3: LIVE LEADERBOARD & MANUAL OVERRIDES */}
         {activeTab === 'leaderboard' && (
-          <LiveLeaderboard
-            roundName="prelim"
-            showOverrideButton={true}
-            onOverrideClick={(entry) => setSelectedOverrideEntry(entry)}
-          />
+          <div className="space-y-4">
+            <div className="flex justify-end">
+              <button
+                onClick={exportLeaderboardCSV}
+                className="px-4 py-2 rounded-xl font-bold text-xs bg-accent-warm/15 hover:bg-accent-warm/25 text-accent-warm border border-accent-warm/40 transition-all flex items-center space-x-2"
+              >
+                <FileSpreadsheet className="w-4 h-4" />
+                <span>Export Results CSV</span>
+              </button>
+            </div>
+            <LiveLeaderboard
+              roundName="prelim"
+              showOverrideButton={true}
+              onOverrideClick={(entry) => setSelectedOverrideEntry(entry)}
+            />
+          </div>
         )}
 
         {/* TAB 4: TEAM REGISTRATIONS TABLE */}
@@ -349,6 +385,13 @@ export default function OrganiserPortalPage() {
               </table>
             </div>
           </div>
+        )}
+
+        {/* TAB 6: DATA MANAGEMENT (organiser-only; deleteTeamsAction /
+            fullEventResetAction re-check requireRole('organiser') server-side
+            regardless of this tab being reachable in the UI) */}
+        {activeTab === 'data' && (
+          <DataManagementPanel teams={teams} onDataChange={fetchOrganiserData} />
         )}
 
         {/* TAB 5: SCORE AUDIT LOG */}

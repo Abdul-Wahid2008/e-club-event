@@ -21,7 +21,7 @@ export default function Navbar({ userRole, teamName }: NavbarProps) {
             </div>
             <div>
               <span className="font-display font-bold text-lg tracking-wide text-text-primary">
-                PITCH UNDER PRESSURE
+                THE PITCH LEAGUE
               </span>
               <span className="block text-[10px] text-text-secondary tracking-widest font-mono uppercase">
                 NIT Warangal • Live Event

@@ -303,10 +303,10 @@ export async function submitPitchScoreAction(payload: {
     .from('pitch_scores')
     .insert({
       pitch_id: sanitizedPitchId,
-      problem_market_score: clamp(scores.problem_market, 20),
-      solution_innovation_score: clamp(scores.solution_innovation, 20),
-      feasibility_score: clamp(scores.feasibility, 15),
-      pitch_storytelling_score: clamp(scores.pitch_storytelling, 15),
+      problem_market_raw: clamp(scores.problem_market, 20),
+      solution_innovation_raw: clamp(scores.solution_innovation, 20),
+      feasibility_raw: clamp(scores.feasibility, 15),
+      pitch_storytelling_raw: clamp(scores.pitch_storytelling, 15),
       submitted_by: userCtx.user.id,
       submitted_by_name: submittedByName,
       locked: true,

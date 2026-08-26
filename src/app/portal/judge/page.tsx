@@ -5,6 +5,7 @@ import Navbar from '@/src/components/Navbar';
 import PitchQueuePanel from '@/src/components/PitchQueuePanel';
 import LiveLeaderboard from '@/src/components/LiveLeaderboard';
 import ScoredPitchesList from '@/src/components/ScoredPitchesList';
+import ConnectionStatus, { ConnState } from '@/src/components/ConnectionStatus';
 import { Award, ListChecks, Trophy } from 'lucide-react';
 import { createClient } from '@/src/lib/supabase/client';
 import { EventState, Pitch, Team, Question, PitchLeaderboardEntry } from '@/src/lib/types';
@@ -17,6 +18,7 @@ export default function JudgePortalPage() {
   const [approvedQuestions, setApprovedQuestions] = useState<Question[]>([]);
   const [leaderboard, setLeaderboard] = useState<PitchLeaderboardEntry[]>([]);
   const [loadingData, setLoadingData] = useState(true);
+  const [connState, setConnState] = useState<ConnState>('connecting');
 
   const fetchData = useCallback(async () => {
     const supabase = createClient();
@@ -57,7 +59,11 @@ export default function JudgePortalPage() {
       .on('postgres_changes', { event: '*', schema: 'public', table: 'pitches' }, () => fetchData())
       .on('postgres_changes', { event: '*', schema: 'public', table: 'pitch_scores' }, () => fetchData())
       .on('postgres_changes', { event: '*', schema: 'public', table: 'questions' }, () => fetchData())
-      .subscribe();
+      .subscribe((status: string) => {
+        if (status === 'SUBSCRIBED') setConnState('connected');
+        else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED') setConnState('reconnecting');
+        else setConnState('connecting');
+      });
 
     return () => {
       supabase.removeChannel(channel);
@@ -89,6 +95,10 @@ export default function JudgePortalPage() {
       <Navbar userRole="judge" />
 
       <main className="flex-1 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8 w-full">
+        <div className="flex justify-end">
+          <ConnectionStatus state={connState} />
+        </div>
+
         <div className="panel rounded-2xl p-2 flex flex-wrap gap-2">
           {tabs.map((tab) => (
             <button

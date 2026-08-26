@@ -1,4 +1,4 @@
-# Pitch Under Pressure — Full End-to-End Test Checklist
+# The Pitch League — Full End-to-End Test Checklist
 
 Run these in order. Each track builds on the previous one (you need a live Supabase project + deployed app before anything else works). Use a spreadsheet or this file itself to tick things off — note the date/time and pass/fail next to each.
 
