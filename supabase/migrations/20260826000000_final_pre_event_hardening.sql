@@ -13,17 +13,43 @@
 --
 -- IMPORTANT — RLS POLICY CAVEAT: sections 0/0b intentionally do NOT attempt
 -- to restate the exact CREATE POLICY statements currently live on teams,
--- team_members, questions, audience_scores, pitch_scores, or event_state.
--- Those were only verified BEHAVIORALLY in this session (raw API calls
--- confirming e.g. cross-pool voting is accepted and same-pool is rejected)
--- -- their exact SQL text was never read, since that requires a direct
--- Postgres connection (pg_policies), which wasn't available. Section 5
--- below only touches the one policy this session's testing proved was
--- actually wrong (pitch_scores' public-read policy) plus a defensive
--- RLS-enabled re-assertion. Treat every OTHER existing policy as
--- untouched/authoritative on the live DB — this migration does not
--- attempt to redefine them, to avoid overwriting a correct-but-undocumented
--- policy with a guessed one.
+-- team_members, questions, audience_scores, or event_state. Those were
+-- only verified BEHAVIORALLY in this session (raw API calls confirming
+-- e.g. cross-pool voting is accepted and same-pool is rejected) -- their
+-- exact SQL text was never read, since that requires a direct Postgres
+-- connection (pg_policies), which wasn't available. Section 5 below only
+-- touches pitch_scores and judge_scores (the two tables this session's
+-- testing proved needed a policy change or clarification) plus a
+-- defensive RLS-enabled re-assertion on every table. Treat every OTHER
+-- existing policy as untouched/authoritative on the live DB — this
+-- migration does not attempt to redefine them, to avoid overwriting a
+-- correct-but-undocumented policy with a guessed one.
+--
+-- DIFF RESULT (checked live on 2026-08-26, after a prior partial run of
+-- an earlier draft of this file had already applied): the pitch_scores
+-- judge/organiser-only read policy that's CURRENTLY ACTIVE in production
+-- matches this file's intended logic exactly -- verified with fresh
+-- organiser/judge/team test accounts: organiser and judge both see the
+-- one real scored-pitch row, team sees zero rows. It is NOT a stale or
+-- wrong version; it's already correct. judge_scores could not be diffed
+-- the same way because that table has zero rows on every role (it's
+-- unused dead weight left over from the pre-overhaul per-criterion
+-- scoring model — current app code never reads or writes it), so an
+-- empty result doesn't distinguish "policy blocks this role" from
+-- "table has no rows for anyone." This file adds an explicit judge/
+-- organiser-only read policy for it anyway, matching the same pattern,
+-- so it's no longer ambiguous either way.
+--
+-- IDEMPOTENCY: every statement below was re-checked to run safely on a
+-- SECOND execution against a DB where the first run already fully
+-- succeeded. DROP POLICY IF EXISTS precedes every CREATE POLICY. The
+-- trigger function/trigger use CREATE OR REPLACE / DROP...IF EXISTS
+-- respectively. Table/column creation uses IF NOT EXISTS throughout.
+-- teams_auth_user_id_unique is NOT touched here — it already exists from
+-- migration 20260814000000_abuse_protection.sql and this file never
+-- tried to recreate it; if you hit an "already exists" error on that
+-- constraint specifically, it came from re-running an OLDER draft of
+-- this migration (from before this idempotency pass), not this version.
 
 -- ============================================================
 -- 0. RECONCILE SCHEMA: columns/tables that exist live but were never
@@ -320,4 +346,19 @@ CREATE POLICY "Judge or organiser read pitch_scores" ON public.pitch_scores FOR 
 DROP POLICY IF EXISTS "Organiser manage pitch_scores" ON public.pitch_scores;
 CREATE POLICY "Organiser manage pitch_scores" ON public.pitch_scores FOR ALL USING (
   EXISTS (SELECT 1 FROM public.profiles WHERE id = auth.uid() AND role = 'organiser')
+);
+
+-- judge_scores: unused by current app code (0 rows live; the app now uses
+-- pitch_scores' single-authoritative-score model instead), but its
+-- original migration's "Judge read own scores, organiser reads all" read
+-- policy (from 20260813000000_rls_hardening.sql) already restricts SELECT
+-- correctly. Adding this defense-in-depth policy anyway matching the same
+-- judge/organiser-only pattern as pitch_scores, since this session
+-- couldn't behaviorally distinguish "policy blocks team role" from
+-- "table has 0 rows for everyone" (see the DIFF RESULT note at the top of
+-- this file) — an explicit policy removes that ambiguity going forward.
+DROP POLICY IF EXISTS "Judge or organiser read judge_scores (pre-event-hardening)" ON public.judge_scores;
+CREATE POLICY "Judge or organiser read judge_scores (pre-event-hardening)" ON public.judge_scores FOR SELECT USING (
+  EXISTS (SELECT 1 FROM public.profiles WHERE id = auth.uid() AND role IN ('judge', 'organiser'))
+  OR EXISTS (SELECT 1 FROM public.judges j WHERE j.id = judge_id AND j.auth_user_id = auth.uid())
 );
