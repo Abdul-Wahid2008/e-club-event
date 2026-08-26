@@ -132,15 +132,42 @@ ALTER TABLE public.otp_request_log ENABLE ROW LEVEL SECURITY;
 
 -- ============================================================
 -- 1. FIX: pitch_leaderboard view was NOT applying the 10% weight to the
---    Q&A component. It appears the view was rewritten (during the
---    judge-panel-overhaul work) to add `qc.qa_pressure_score` directly
---    instead of `qc.qa_pressure_score * 0.10`, inflating every scored
---    pitch's total by up to +90 points. Verified by hand-calculation
---    against a real scored pitch on 2026-08-26: DB reported
---    total_weighted_score = 68.5, hand-calculated correct value (with the
---    documented 20/20/15/15/20/10 weights) = 59.5, a discrepancy of
---    exactly the un-weighted qa_pressure_score (10) added at 100% instead
---    of 10%.
+--    Q&A component, AND was scaling the four judge sub-scores with a flat
+--    *10 multiplier regardless of each category's actual raw max (20 for
+--    problem_market/solution_innovation, 15 for feasibility/storytelling
+--    -- confirmed from PITCH_SCORE_CATEGORY_MAX in organiserActions.ts and
+--    the ScoreSlider max={20}/max={15} props in PitchQueuePanel.tsx). Both
+--    bugs were present in the view inherited from the judge-panel-overhaul
+--    work; this file fixes both.
+--
+--    CORRECTED HAND-VERIFICATION (2026-08-26, redone from scratch after an
+--    earlier round of this same file initially claimed the correct total
+--    was 59.5 -- that number was itself wrong, computed by reusing the
+--    PRE-FIX broken view's problem_market_score/solution_innovation_score/
+--    feasibility_score/pitch_storytelling_score outputs as "known good"
+--    without re-deriving them from the raw judge input scale. The actual
+--    correct total, verified independently against the real scored
+--    pitch's raw values (problem_market_raw=8/20, solution_innovation_raw
+--    =8/20, feasibility_raw=7/15, pitch_storytelling_raw=7/15,
+--    audience_rating_score=27.5, total_qa_points=2):
+--      problem_market_score   = 8/20*100  = 40.0   (not 80 -- the pre-fix
+--                                                    view used raw*10,
+--                                                    which only makes
+--                                                    sense for a 0-10
+--                                                    scale, not this
+--                                                    table's actual 0-20)
+--      solution_innovation_score = 40.0   (same reasoning)
+--      feasibility_score       = 7/15*100 = 46.67  (not 70 -- same *10
+--                                                    vs *(100/15) issue)
+--      pitch_storytelling_score = 46.67
+--      audience_rating_score   = 27.5     (unchanged, was already correct)
+--      qa_pressure_score       = 70       (unchanged formula, now
+--                                          correctly weighted at 10% below
+--                                          instead of added unweighted)
+--      TOTAL = 40*.20 + 40*.20 + 46.67*.15 + 46.67*.15 + 27.5*.20 + 70*.10
+--            = 8 + 8 + 7 + 7 + 5.5 + 7 = 42.5
+--    This 42.5 figure is now confirmed live in production and matches
+--    this hand-calculation exactly.
 --
 --    NOTE: the first attempt at this migration used CREATE OR REPLACE VIEW,
 --    which Postgres rejects when a column's data type changes ("cannot
