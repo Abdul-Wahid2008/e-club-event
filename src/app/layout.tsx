@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import { Inter, Space_Grotesk } from 'next/font/google';
+import { SpeedInsights } from '@vercel/speed-insights/next';
 import './globals.css';
 
 const inter = Inter({
@@ -50,6 +51,7 @@ export default function RootLayout({
           <span className="orb orb-3" />
         </div>
         {children}
+        <SpeedInsights />
       </body>
     </html>
   );

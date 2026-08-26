@@ -37,7 +37,7 @@ export default function TeamAuthPage() {
     if (res.error) {
       setMessage({ type: 'error', text: res.error });
     } else {
-      setMessage({ type: 'success', text: 'Magic code sent to your inbox! Enter the OTP below.' });
+      setMessage({ type: 'success', text: 'Code sent to your inbox! Enter it below to sign in or complete registration.' });
       setStep('verify');
     }
   };
@@ -57,6 +57,8 @@ export default function TeamAuthPage() {
 
     if (res.error) {
       setMessage({ type: 'error', text: res.error });
+    } else if (res.isReturningTeam) {
+      router.push('/portal/team');
     } else {
       router.push('/register-team');
     }
@@ -74,7 +76,7 @@ export default function TeamAuthPage() {
             </div>
             <h1 className="font-display text-2xl font-bold text-text-primary tracking-tight">Team Authentication</h1>
             <p className="text-xs text-text-secondary">
-              Enter any valid email address to receive your OTP code.
+              We&apos;ll send a code to sign in or complete your registration.
             </p>
           </div>
 
