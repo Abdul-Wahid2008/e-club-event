@@ -80,10 +80,28 @@ function useWebglSupported() {
  * state. Falls back to a static gradient blob if WebGL context creation
  * fails or the user prefers reduced motion — never a dependency of any
  * functional/input screen's critical render path.
+ *
+ * PERFORMANCE: WebGL canvas creation is deferred until after the browser's
+ * main thread is idle (or a short timeout as a fallback), rather than
+ * mounting immediately. This is purely decorative background content, so
+ * it should never compete with the actual headline/CTA/timer for the
+ * main-thread and GPU time that determines First Contentful Paint / Largest
+ * Contentful Paint on real mobile hardware — confirmed via Vercel Speed
+ * Insights field data showing FCP/LCP ~1.5s slower than raw server TTFB.
  */
 export default function HeroShard({ className = '' }: { className?: string }) {
   const reduced = usePrefersReducedMotion();
   const webglSupported = useWebglSupported();
+  const [shouldMount, setShouldMount] = useState(false);
+
+  useEffect(() => {
+    if (reduced) return;
+    const win = window as any;
+    const schedule = win.requestIdleCallback || ((cb: () => void) => setTimeout(cb, 300));
+    const cancel = win.cancelIdleCallback || clearTimeout;
+    const handle = schedule(() => setShouldMount(true));
+    return () => cancel(handle);
+  }, [reduced]);
 
   if (reduced || webglSupported === false) {
     return (
@@ -94,8 +112,10 @@ export default function HeroShard({ className = '' }: { className?: string }) {
     );
   }
 
-  // Don't render Canvas until we know WebGL is actually available (or SSR).
-  if (webglSupported === null) {
+  // Don't render Canvas until we know WebGL is actually available (or SSR),
+  // AND until the main thread has had a chance to paint the critical
+  // content first.
+  if (webglSupported === null || !shouldMount) {
     return <div className={className} aria-hidden="true" />;
   }
 

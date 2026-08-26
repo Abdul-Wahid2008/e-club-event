@@ -42,14 +42,16 @@ export default function LandingPage() {
             <span>NIT Warangal Startup pitching arena</span>
           </motion.div>
 
-          <motion.h1
-            initial={reduced ? undefined : { opacity: 0, y: 12 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.5, delay: 0.1 }}
-            className="font-display text-4xl sm:text-6xl font-bold tracking-tight text-text-primary max-w-4xl mx-auto leading-tight"
-          >
-            PITCH UNDER <span className="bg-clip-text text-transparent bg-gradient-to-r from-brand-500 via-accent-live to-accent-warm">PRESSURE</span>
-          </motion.h1>
+          {/* PERFORMANCE: this headline is almost certainly the LCP element
+              on this page. Rendered plain (no Framer Motion entrance
+              animation, no opacity/transform delay) so it counts as
+              "painted" the moment it hits the DOM instead of after a
+              0.1s-delay + 0.5s fade-in transition — confirmed via Speed
+              Insights field data that LCP was running ~1.5s behind raw
+              server TTFB on real mobile traffic. */}
+          <h1 className="font-display text-4xl sm:text-6xl font-bold tracking-tight text-text-primary max-w-4xl mx-auto leading-tight">
+            THE PITCH <span className="bg-clip-text text-transparent bg-gradient-to-r from-brand-500 via-accent-live to-accent-warm">LEAGUE</span>
+          </h1>
 
           <p className="text-base sm:text-lg text-text-secondary max-w-2xl mx-auto leading-relaxed">
             The ultimate live startup showdown. Fresher founders pitch, expert judges evaluate, and rival teams submit real-time pressure questions for high-stakes points.
