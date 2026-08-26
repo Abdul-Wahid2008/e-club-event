@@ -3,7 +3,6 @@
 import { useState, useEffect } from 'react';
 import Navbar from '@/src/components/Navbar';
 import CountdownTimer from '@/src/components/CountdownTimer';
-import LiveLeaderboard from '@/src/components/LiveLeaderboard';
 import Toast, { ToastMessage } from '@/src/components/Toast';
 import PoolBadge from '@/src/components/PoolBadge';
 import { Users, Flame, Send, CheckCircle2, ShieldAlert, Trophy, HelpCircle } from 'lucide-react';
@@ -393,9 +392,6 @@ export default function TeamPortalPage() {
           </div>
         )}
 
-        {/* REALTIME LIVE LEADERBOARD */}
-        <LiveLeaderboard roundName="prelim" />
-
         {/* YOUR TEAM'S JOURNEY SUMMARY */}
         <div className="card rounded-2xl p-6 space-y-4">
           <h3 className="text-lg font-bold text-text-primary flex items-center space-x-2">
@@ -422,7 +418,7 @@ export default function TeamPortalPage() {
                       <p className="text-text-primary line-clamp-2">{q.question_text}</p>
                       <div className="flex items-center justify-between text-[10px] text-text-secondary mt-1">
                         <span>Status: <strong className="text-brand-500 uppercase">{q.status}</strong></span>
-                        {q.points_to_asker > 0 && <span className="text-accent-warm font-bold">+{q.points_to_asker} pts earned</span>}
+                        {q.points_asking > 0 && <span className="text-accent-warm font-bold">+{q.points_asking} pts earned</span>}
                       </div>
                     </div>
                   ))}

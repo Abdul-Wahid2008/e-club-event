@@ -84,8 +84,8 @@ export async function reviewQuestionAction(
     .update({
       status,
       outcome: outcome || null,
-      points_to_team: pointsToTeam,
-      points_to_asker: pointsToAsker,
+      points_pitching: pointsToTeam,
+      points_asking: pointsToAsker,
     })
     .eq('id', sanitizedQuestionId);
 
@@ -96,10 +96,10 @@ export async function reviewQuestionAction(
 }
 
 const PITCH_SCORE_CATEGORY_MAX: Record<string, number> = {
-  problem_market_score: 20,
-  solution_innovation_score: 20,
-  feasibility_score: 15,
-  pitch_storytelling_score: 15,
+  problem_market_raw: 20,
+  solution_innovation_raw: 20,
+  feasibility_raw: 15,
+  pitch_storytelling_raw: 15,
 };
 
 export async function manualOverrideScoreAction(payload: {
@@ -151,8 +151,8 @@ export async function manualOverrideScoreAction(payload: {
     await adminSupabase
       .from('questions')
       .update({
-        points_to_team: Number(newValue.points_to_team) || 0,
-        points_to_asker: Number(newValue.points_to_asker) || 0,
+        points_pitching: Number(newValue.points_pitching) || 0,
+        points_asking: Number(newValue.points_asking) || 0,
       })
       .eq('id', sanitizedRowId);
   }

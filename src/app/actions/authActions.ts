@@ -105,6 +105,24 @@ export async function registerTeamAction(payload: {
     return { error: `You have already registered a team ("${existingTeam.team_name}"). Each account may register only one team.` };
   }
 
+  // 3c. ABUSE PROTECTION: block any team member email (leader or otherwise)
+  // that's already registered as a member of a DIFFERENT team. Without this,
+  // the same person can end up attached to two teams in two different pools
+  // (confirmed root cause of a dry-run bug where the Team Portal and
+  // Organiser/Judge panels appeared to disagree on a person's pool — each
+  // was correctly reading a different team-membership row for that email).
+  // Backed by the team_members_email_unique DB constraint; this is just a
+  // friendlier pre-check with a clear error naming which email collided.
+  const { data: existingMembers } = await adminSupabase
+    .from('team_members')
+    .select('email')
+    .in('email', allEmails);
+
+  if (existingMembers && existingMembers.length > 0) {
+    const collided = existingMembers.map((m) => m.email).join(', ');
+    return { error: `These emails are already registered on another team: ${collided}. Each person may only be a member of one team.` };
+  }
+
   // 4. Random Domain Selection from `domains` table
   const { data: domains, error: domainErr } = await adminSupabase.from('domains').select('name');
   if (domainErr || !domains || domains.length === 0) {
@@ -112,20 +130,13 @@ export async function registerTeamAction(payload: {
   }
   const randomDomain = domains[Math.floor(Math.random() * domains.length)].name;
 
-  // 5. Auto-Balanced Pool Assignment (A or B)
-  const { data: poolACount } = await adminSupabase
-    .from('teams')
-    .select('id', { count: 'exact' })
-    .eq('pool', 'A');
-  
-  const { data: poolBCount } = await adminSupabase
-    .from('teams')
-    .select('id', { count: 'exact' })
-    .eq('pool', 'B');
-
-  const countA = poolACount?.length || 0;
-  const countB = poolBCount?.length || 0;
-  const assignedPool: 'A' | 'B' = countA <= countB ? 'A' : 'B';
+  // 5. Pool assignment: leave `pool` unset here and let the
+  // assign_balanced_pool DB trigger decide it atomically inside the same
+  // insert transaction. Deciding it here via two separate SELECT count
+  // round-trips is race-prone — two concurrent registrations can both read
+  // the same under-filled pool and both land in it, which is exactly what
+  // happened live during the dry run (two teams registered in the same
+  // millisecond both went to Pool A).
 
   // 6. Insert Team
   const { data: team, error: teamErr } = await adminSupabase
@@ -134,7 +145,6 @@ export async function registerTeamAction(payload: {
       auth_user_id: user.id,
       team_name: teamName,
       domain: randomDomain,
-      pool: assignedPool,
       status: 'registered',
     })
     .select()
@@ -168,6 +178,9 @@ export async function registerTeamAction(payload: {
 
   const { error: membersErr } = await adminSupabase.from('team_members').insert(memberRows);
   if (membersErr) {
+    if (membersErr.code === '23505') {
+      return { error: 'One of these emails is already registered as a member of another team. Each person may only be a member of one team.' };
+    }
     return { error: 'Failed to register team members.' };
   }
 
@@ -180,7 +193,7 @@ export async function registerTeamAction(payload: {
     success: true,
     team,
     domain: randomDomain,
-    pool: assignedPool,
+    pool: team.pool,
   };
 }
 

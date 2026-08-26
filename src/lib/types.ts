@@ -119,8 +119,8 @@ export interface Question {
   question_text: string;
   status: QuestionStatus;
   outcome: QuestionOutcome;
-  points_to_team: number;
-  points_to_asker: number;
+  points_pitching: number;
+  points_asking: number;
   created_at: string;
   asking_team?: Team;
 }
