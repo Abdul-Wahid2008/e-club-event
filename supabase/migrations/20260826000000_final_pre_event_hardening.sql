@@ -243,7 +243,7 @@ JOIN public.rounds r ON r.id = p.round_id
 JOIN judge_component jc ON jc.pitch_id = p.id
 JOIN audience_component ac ON ac.pitch_id = p.id
 JOIN qa_component qc ON qc.pitch_id = p.id
-WHERE EXISTS (
+WHERE (
   -- ============================================================
   -- 2. FIX: pitch_leaderboard was readable by the unauthenticated `anon`
   --    role with no login at all (confirmed via a raw REST request using
@@ -254,9 +254,25 @@ WHERE EXISTS (
   --    judge/organiser profiles — a plain anon or team-role caller gets
   --    zero rows back, satisfying section 10 (Team Portal must not be able
   --    to fetch leaderboard/ranking data) at the same time.
+  --
+  --    BUG FOUND + FIXED (2026-08-26, post-deploy verification): the first
+  --    version of this WHERE clause checked ONLY auth.uid()-based profile
+  --    membership, which is null/meaningless for the service_role client
+  --    (createAdminClient() in organiserActions.ts — used by
+  --    qualifyFinalFourAction and exportLeaderboardCsvAction) and for the
+  --    Judge/Organiser portal pages that also query this view. Confirmed
+  --    live: the view returned ZERO rows even to service_role, silently
+  --    breaking Final-4 qualification and the results CSV export. Adding
+  --    an explicit `auth.role() = 'service_role'` escape hatch alongside
+  --    the judge/organiser profile check fixes this without reopening the
+  --    anon/team-role hole — service_role is never exposed to a browser,
+  --    it only runs inside trusted server actions.
   -- ============================================================
-  SELECT 1 FROM public.profiles pr
-  WHERE pr.id = auth.uid() AND pr.role IN ('judge', 'organiser')
+  auth.role() = 'service_role'
+  OR EXISTS (
+    SELECT 1 FROM public.profiles pr
+    WHERE pr.id = auth.uid() AND pr.role IN ('judge', 'organiser')
+  )
 )
 ORDER BY total_weighted_score DESC NULLS LAST;
 

@@ -20,8 +20,9 @@ function revalidateAllPortals() {
  * check is what actually stops a non-organiser request.
  */
 export async function deleteTeamsAction(teamIds: string[]) {
+  let userCtx;
   try {
-    await requireRole('organiser');
+    userCtx = await requireRole('organiser');
   } catch (err: any) {
     return { error: err.message || 'Unauthorized action.' };
   }
@@ -37,8 +38,22 @@ export async function deleteTeamsAction(teamIds: string[]) {
 
   const adminSupabase = createAdminClient();
 
+  const { data: deletedTeams } = await adminSupabase
+    .from('teams')
+    .select('id, team_name')
+    .in('id', sanitizedIds);
+
   const { error } = await adminSupabase.from('teams').delete().in('id', sanitizedIds);
   if (error) return { error: error.message };
+
+  await adminSupabase.from('score_audit_log').insert({
+    changed_by: userCtx.user.id,
+    table_changed: 'teams',
+    row_id: sanitizedIds[0],
+    old_value: deletedTeams,
+    new_value: null,
+    note: `Deleted ${sanitizedIds.length} team(s) via Data Management: ${(deletedTeams || []).map((t) => t.team_name).join(', ')}.`,
+  });
 
   revalidateAllPortals();
   return { success: true, deletedCount: sanitizedIds.length };
@@ -54,8 +69,9 @@ export async function deleteTeamsAction(teamIds: string[]) {
  * confirmation ever having been shown.
  */
 export async function fullEventResetAction(confirmationPhrase: string) {
+  let userCtx;
   try {
-    await requireRole('organiser');
+    userCtx = await requireRole('organiser');
   } catch (err: any) {
     return { error: err.message || 'Unauthorized action.' };
   }
@@ -104,12 +120,12 @@ export async function fullEventResetAction(confirmationPhrase: string) {
   if (stateErr) return { error: stateErr.message };
 
   await adminSupabase.from('score_audit_log').insert({
-    changed_by: null,
+    changed_by: userCtx.user.id,
     table_changed: 'FULL_EVENT_RESET',
     row_id: '00000000-0000-0000-0000-000000000000',
     old_value: null,
     new_value: null,
-    note: 'Full event reset executed from Organiser Data Management panel.',
+    note: `Full event reset executed by ${userCtx.user.email} from Organiser Data Management panel.`,
   });
 
   revalidateAllPortals();

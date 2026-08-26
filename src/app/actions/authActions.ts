@@ -113,12 +113,18 @@ export async function registerTeamAction(payload: {
   // was correctly reading a different team-membership row for that email).
   // Backed by the team_members_email_unique DB constraint; this is just a
   // friendlier pre-check with a clear error naming which email collided.
-  const { data: existingMembers } = await adminSupabase
+  // Matches the team_members_email_unique index (UNIQUE on lower(email)),
+  // which is case-insensitive — .in('email', ...) alone is not, so an
+  // email differing only by case would slip past this pre-check and only
+  // get caught by the raw DB constraint below with a less friendly error.
+  const lowerEmails = allEmails.map((e) => e.toLowerCase());
+  const { data: allMemberEmails } = await adminSupabase
     .from('team_members')
-    .select('email')
-    .in('email', allEmails);
+    .select('email');
 
-  if (existingMembers && existingMembers.length > 0) {
+  const existingMembers = (allMemberEmails || []).filter((m) => lowerEmails.includes(m.email.toLowerCase()));
+
+  if (existingMembers.length > 0) {
     const collided = existingMembers.map((m) => m.email).join(', ');
     return { error: `These emails are already registered on another team: ${collided}. Each person may only be a member of one team.` };
   }
