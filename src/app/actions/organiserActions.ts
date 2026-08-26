@@ -48,6 +48,51 @@ export async function exportRegistrationsCsvAction() {
   return { success: true, csv };
 }
 
+export async function exportLeaderboardCsvAction(roundName: 'prelim' | 'final' = 'prelim') {
+  try {
+    await requireRole('organiser');
+  } catch (err: any) {
+    return { error: err.message || 'Unauthorized action.' };
+  }
+
+  const adminSupabase = createAdminClient();
+
+  const { data: leaderboard, error } = await adminSupabase
+    .from('pitch_leaderboard')
+    .select('*')
+    .eq('round_name', roundName)
+    .order('total_weighted_score', { ascending: false, nullsFirst: false });
+
+  if (error || !leaderboard) {
+    return { error: error?.message || 'Failed to fetch leaderboard.' };
+  }
+
+  const headers = [
+    'Rank', 'Team Name', 'Domain', 'Pool',
+    'Problem & Market (20%)', 'Solution & Innovation (20%)', 'Feasibility (15%)', 'Storytelling (15%)',
+    'Audience Rating (20%)', 'Q&A Pressure (10%)', 'Total Weighted Score', 'Judges Submitted', 'Total Voters',
+  ];
+
+  const rows = (leaderboard as PitchLeaderboardEntry[]).map((e, i) => [
+    e.total_weighted_score !== null ? String(i + 1) : '—',
+    `"${e.team_name}"`,
+    `"${e.domain}"`,
+    `"${e.pool}"`,
+    e.problem_market_score.toFixed(1),
+    e.solution_innovation_score.toFixed(1),
+    e.feasibility_score.toFixed(1),
+    e.pitch_storytelling_score.toFixed(1),
+    e.audience_rating_score.toFixed(1),
+    e.qa_pressure_score.toFixed(1),
+    e.total_weighted_score !== null ? e.total_weighted_score.toFixed(2) : 'Awaiting Score',
+    String(e.judges_submitted_count),
+    String(e.total_voters),
+  ].join(','));
+
+  const csv = [headers.join(','), ...rows].join('\n');
+  return { success: true, csv };
+}
+
 export async function reviewQuestionAction(
   questionId: string,
   status: 'approved' | 'rejected',

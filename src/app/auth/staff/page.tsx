@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import Navbar from '@/src/components/Navbar';
+import Footer from '@/src/components/Footer';
 import Toast, { ToastMessage } from '@/src/components/Toast';
 import { Award, Lock, Mail, ArrowRight } from 'lucide-react';
 import { staffLoginAction } from '@/src/app/actions/authActions';
@@ -89,6 +90,7 @@ export default function StaffAuthPage() {
           </form>
         </div>
       </main>
+      <Footer />
     </div>
   );
 }

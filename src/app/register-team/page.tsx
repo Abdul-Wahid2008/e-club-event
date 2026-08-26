@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import Navbar from '@/src/components/Navbar';
+import Footer from '@/src/components/Footer';
 import Toast, { ToastMessage } from '@/src/components/Toast';
 import { Users, Plus, Trash2, Sparkles, ArrowRight } from 'lucide-react';
 import { registerTeamAction } from '@/src/app/actions/authActions';
@@ -267,6 +268,7 @@ export default function RegisterTeamPage() {
           </div>
         )}
       </main>
+      <Footer />
     </div>
   );
 }
