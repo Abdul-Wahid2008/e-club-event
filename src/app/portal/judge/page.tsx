@@ -54,12 +54,14 @@ export default function JudgePortalPage() {
       .order('created_at', { ascending: true });
     setPendingQuestions((pqData as any) || []);
 
-    const { data: lbData } = await supabase.from('pitch_leaderboard').select('*').eq('round_name', 'prelim');
+    const [{ data: lbData }, { data: finalLb }] = await Promise.all([
+      supabase.from('pitch_leaderboard').select('*').eq('round_name', 'prelim'),
+      supabase.from('pitch_leaderboard').select('*').eq('round_name', 'final'),
+    ]);
     setLeaderboard((lbData as PitchLeaderboardEntry[]) || []);
 
-    // Podium reveal banner (section 7): Final round's own scoring if one
-    // ran, otherwise falls back to the same prelim data as above.
-    const { data: finalLb } = await supabase.from('pitch_leaderboard').select('*').eq('round_name', 'final');
+    // Podium reveal banner: Final round's own scoring if one ran,
+    // otherwise falls back to the same prelim data as above.
     setPodiumLeaderboard(finalLb && finalLb.length > 0 ? (finalLb as PitchLeaderboardEntry[]) : ((lbData as PitchLeaderboardEntry[]) || []));
 
     setLoadingData(false);

@@ -20,20 +20,20 @@ export const metadata: Metadata = {
   title: 'The Pitch League | NIT Warangal Startup Competition',
   description: 'Live pitch scoring, audience pressure-testing, and real-time event portal for NIT Warangal.',
   icons: {
-    icon: '/logo-icon.png',
-    apple: '/logo-icon.png',
+    icon: '/favicon-64.png',
+    apple: '/logo-icon-optimized.png',
   },
   openGraph: {
     title: 'The Pitch League',
     description: 'Live pitch scoring, audience pressure-testing, and real-time event portal for NIT Warangal.',
-    images: ['/logo-icon.png'],
+    images: ['/logo-icon-optimized.png'],
     type: 'website',
   },
   twitter: {
     card: 'summary_large_image',
     title: 'The Pitch League',
     description: 'Live pitch scoring, audience pressure-testing, and real-time event portal for NIT Warangal.',
-    images: ['/logo-icon.png'],
+    images: ['/logo-icon-optimized.png'],
   },
 };
 

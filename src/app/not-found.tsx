@@ -5,7 +5,7 @@ import { ArrowLeft } from 'lucide-react';
 export default function NotFound() {
   return (
     <div className="min-h-screen flex flex-col items-center justify-center text-center px-6 space-y-6">
-      <Image src="/logo-icon.png" alt="The Pitch League" width={72} height={72} className="w-16 h-16 object-contain opacity-80" />
+      <Image src="/logo-icon-optimized.png" alt="The Pitch League" width={72} height={72} className="w-16 h-16 object-contain opacity-80" />
 
       <div className="space-y-2">
         <h1 className="font-display text-3xl sm:text-4xl font-bold text-text-primary">Looks like this pitch got cut.</h1>

@@ -150,11 +150,33 @@ WHERE (
     SELECT 1 FROM public.profiles pr
     WHERE pr.id = auth.uid() AND pr.role IN ('judge', 'organiser')
   )
+  -- BUG FOUND + FIXED (2026-08-27, post-deploy verification): the first
+  -- version of this access-control fix only ever admitted service_role or
+  -- judge/organiser, which silently broke the Top-3 reveal ceremony this
+  -- same feature set ships -- revealTopThreeAction sets
+  -- event_state.results_revealed = true specifically so the Team Portal
+  -- (team-role client) and the public /display screen (anon client, no
+  -- login, by design -- see that page's own doc comment) can show the
+  -- final leaderboard/podium. Confirmed live: after flipping
+  -- results_revealed, a team-role session got 200 with zero rows (looks
+  -- like "no data", not an error) and the anon client got a hard 401 --
+  -- both the Team Portal's reveal panel and the projector's podium
+  -- ceremony would have shown nothing at the exact climactic moment of
+  -- the event. Once results are revealed, everyone may read the
+  -- leaderboard -- that is the entire point of "reveal".
+  OR EXISTS (
+    SELECT 1 FROM public.event_state es
+    WHERE es.id = 1 AND es.results_revealed = true
+  )
 )
 ORDER BY total_weighted_score DESC;
 
-GRANT SELECT ON public.pitch_leaderboard TO authenticated;
-REVOKE ALL ON public.pitch_leaderboard FROM anon;
+-- anon must be granted SELECT (not revoked) for the /display broadcast
+-- screen's pre-login reveal to work at all -- the WHERE clause above is
+-- what actually gates visibility (anon still gets zero rows before
+-- results_revealed flips true, since none of the other three conditions
+-- can ever be true for an anonymous caller).
+GRANT SELECT ON public.pitch_leaderboard TO authenticated, anon;
 
 -- event_state.results_revealed rides the existing supabase_realtime
 -- publication membership (event_state was already added in the initial

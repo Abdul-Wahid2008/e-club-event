@@ -412,3 +412,43 @@ export async function revealTopThreeAction() {
   revalidatePath('/display');
   return { success: true };
 }
+
+/**
+ * Safety valve for revealTopThreeAction: the only other way to flip
+ * results_revealed back to false was a Full Event Reset, which also wipes
+ * every team/score/question -- catastrophic overkill for "the organiser
+ * clicked Reveal by accident/too early." This flips the flag back alone,
+ * with nothing else touched, so the mistake costs nothing.
+ */
+export async function unrevealResultsAction() {
+  let userCtx;
+  try {
+    userCtx = await requireRole('organiser');
+  } catch (err: any) {
+    return { error: err.message || 'Unauthorized action.' };
+  }
+
+  const adminSupabase = createAdminClient();
+
+  const { error } = await adminSupabase
+    .from('event_state')
+    .update({ results_revealed: false, updated_at: new Date().toISOString() })
+    .eq('id', 1);
+
+  if (error) return { error: error.message };
+
+  await adminSupabase.from('score_audit_log').insert({
+    changed_by: userCtx.user.id,
+    table_changed: 'event_state',
+    row_id: '00000000-0000-0000-0000-000000000001',
+    old_value: { results_revealed: true },
+    new_value: { results_revealed: false },
+    note: '[UN-REVEAL] Organiser hid the Top 3 & Leaderboard reveal again (results were shown early or by mistake).',
+  });
+
+  revalidatePath('/portal/organiser');
+  revalidatePath('/portal/team');
+  revalidatePath('/portal/judge');
+  revalidatePath('/display');
+  return { success: true };
+}

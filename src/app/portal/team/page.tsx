@@ -71,8 +71,10 @@ export default function TeamPortalPage() {
     // results_revealed = true (see migration), so this is a no-op fetch
     // pre-reveal — the UI gate below also never renders it before then.
     if (es?.results_revealed) {
-      const { data: finalLb } = await supabase.from('pitch_leaderboard').select('*').eq('round_name', 'final');
-      const { data: prelimLb } = await supabase.from('pitch_leaderboard').select('*').eq('round_name', 'prelim');
+      const [{ data: finalLb }, { data: prelimLb }] = await Promise.all([
+        supabase.from('pitch_leaderboard').select('*').eq('round_name', 'final'),
+        supabase.from('pitch_leaderboard').select('*').eq('round_name', 'prelim'),
+      ]);
       setPodiumLeaderboard(finalLb && finalLb.length > 0 ? (finalLb as PitchLeaderboardEntry[]) : ((prelimLb as PitchLeaderboardEntry[]) || []));
     }
     if (es?.current_pitch_id) {

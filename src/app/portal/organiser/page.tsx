@@ -18,6 +18,7 @@ import {
   exportRegistrationsCsvAction,
   exportLeaderboardCsvAction,
   revealTopThreeAction,
+  unrevealResultsAction,
 } from '@/src/app/actions/organiserActions';
 
 export default function OrganiserPortalPage() {
@@ -81,14 +82,15 @@ export default function OrganiserPortalPage() {
     setAuditLogs((auditData as ScoreAuditLog[]) || []);
 
     // For the podium reveal banner: Final round's own scoring if one ran,
-    // otherwise the prelim leaderboard (section 7's round-structure rule).
-    const { data: finalLb } = await supabase.from('pitch_leaderboard').select('*').eq('round_name', 'final');
-    if (finalLb && finalLb.length > 0) {
-      setLeaderboard(finalLb as PitchLeaderboardEntry[]);
-    } else {
-      const { data: prelimLb } = await supabase.from('pitch_leaderboard').select('*').eq('round_name', 'prelim');
-      setLeaderboard((prelimLb as PitchLeaderboardEntry[]) || []);
-    }
+    // otherwise the prelim leaderboard. Both fetched in parallel rather
+    // than sequentially-on-condition -- this endpoint is hit on every
+    // Realtime event throughout the whole event, not just at reveal time,
+    // so the extra round-trip latency was a real, continuous cost.
+    const [{ data: finalLb }, { data: prelimLb }] = await Promise.all([
+      supabase.from('pitch_leaderboard').select('*').eq('round_name', 'final'),
+      supabase.from('pitch_leaderboard').select('*').eq('round_name', 'prelim'),
+    ]);
+    setLeaderboard(finalLb && finalLb.length > 0 ? (finalLb as PitchLeaderboardEntry[]) : ((prelimLb as PitchLeaderboardEntry[]) || []));
 
     setLoadingData(false);
   }, []);
@@ -131,9 +133,21 @@ export default function OrganiserPortalPage() {
   };
 
   const handleRevealTopThree = async () => {
-    if (!confirm('Reveal the Top 3 & full leaderboard to everyone now? This cannot be undone during the event.')) return;
+    if (!confirm('Reveal the Top 3 & full leaderboard to everyone now?')) return;
     setLoadingAction(true);
     const res = await revealTopThreeAction();
+    setLoadingAction(false);
+    if (res.success) {
+      fetchOrganiserData();
+    } else if (res.error) {
+      alert(res.error);
+    }
+  };
+
+  const handleUnreveal = async () => {
+    if (!confirm('Hide the reveal again? Use this if it was shown too early or by mistake.')) return;
+    setLoadingAction(true);
+    const res = await unrevealResultsAction();
     setLoadingAction(false);
     if (res.success) {
       fetchOrganiserData();
@@ -241,15 +255,30 @@ export default function OrganiserPortalPage() {
 
               {/* Organiser-only, single end-of-event moment: flips
                   results_revealed and broadcasts the podium ceremony to
-                  Team/Judge/Organiser/Display via Realtime. */}
-              <button
-                onClick={handleRevealTopThree}
-                disabled={loadingAction || eventState?.results_revealed}
-                className="px-4 py-2.5 rounded-xl font-bold text-xs bg-gradient-to-r from-brand-500 via-purple-500 to-accent-live text-white shadow-brand-glow hover:scale-105 transition-all flex items-center space-x-2 disabled:opacity-50 disabled:hover:scale-100"
-              >
-                <PartyPopper className="w-4 h-4" />
-                <span>{eventState?.results_revealed ? 'Results Revealed' : 'Reveal Top 3 & Leaderboard'}</span>
-              </button>
+                  Team/Judge/Organiser/Display via Realtime. Safety valve:
+                  if this was clicked too early or by mistake, "Undo Reveal"
+                  flips it back without touching any scores/teams/questions
+                  -- the only other way to un-reveal was a Full Event Reset,
+                  which wipes everything. */}
+              {eventState?.results_revealed ? (
+                <button
+                  onClick={handleUnreveal}
+                  disabled={loadingAction}
+                  className="px-4 py-2.5 rounded-xl font-bold text-xs bg-white/5 hover:bg-danger-500/15 text-text-secondary hover:text-danger-500 border border-panel-border transition-all flex items-center space-x-2"
+                >
+                  <PartyPopper className="w-4 h-4" />
+                  <span>Undo Reveal (shown too early?)</span>
+                </button>
+              ) : (
+                <button
+                  onClick={handleRevealTopThree}
+                  disabled={loadingAction}
+                  className="px-4 py-2.5 rounded-xl font-bold text-xs bg-gradient-to-r from-brand-500 via-purple-500 to-accent-live text-white shadow-brand-glow hover:scale-105 transition-all flex items-center space-x-2 disabled:opacity-50 disabled:hover:scale-100"
+                >
+                  <PartyPopper className="w-4 h-4" />
+                  <span>Reveal Top 3 & Leaderboard</span>
+                </button>
+              )}
             </div>
 
             {qualifySuccessMsg && (

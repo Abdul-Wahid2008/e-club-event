@@ -101,6 +101,19 @@ export async function fullEventResetAction(confirmationPhrase: string) {
     if (error) return { error: `Failed clearing ${step.table}: ${error.message}` };
   }
 
+  // domains.assigned_count backs assign_least_used_domain()'s
+  // least-used-first pick (see 20260816000000_post_dryrun_overhaul.sql).
+  // It is NOT reset by deleting teams -- without this, a reset event would
+  // start real registrations with the previous test run's skewed counts
+  // still in place, badly unbalancing domain assignment from minute one
+  // (confirmed live: a prior test run left some domains at 0 and others at
+  // 3, which would have persisted through to raw event day).
+  const { error: domainResetErr } = await adminSupabase
+    .from('domains')
+    .update({ assigned_count: 0 })
+    .neq('id', '00000000-0000-0000-0000-000000000000');
+  if (domainResetErr) return { error: `Failed resetting domain counts: ${domainResetErr.message}` };
+
   const { data: prelimRound } = await adminSupabase.from('rounds').select('id').eq('name', 'prelim').single();
 
   const { error: stateErr } = await adminSupabase
