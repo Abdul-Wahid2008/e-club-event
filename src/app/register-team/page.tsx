@@ -110,7 +110,7 @@ export default function RegisterTeamPage() {
             <div className="space-y-2">
               <h1 className="font-display text-3xl font-bold text-text-primary">Team Successfully Registered!</h1>
               <p className="text-sm text-text-secondary">
-                Welcome <span className="text-brand-500 font-bold">{assignedResult.teamName}</span> to Pitch Under Pressure!
+                Welcome <span className="text-brand-500 font-bold">{assignedResult.teamName}</span> to The Pitch League!
               </p>
             </div>
 

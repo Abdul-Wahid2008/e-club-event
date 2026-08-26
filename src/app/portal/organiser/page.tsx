@@ -129,7 +129,7 @@ export default function OrganiserPortalPage() {
     const encodedUri = encodeURI(csvContent);
     const link = document.createElement('a');
     link.setAttribute('href', encodedUri);
-    link.setAttribute('download', `pitch_under_pressure_teams_${Date.now()}.csv`);
+    link.setAttribute('download', `the_pitch_league_teams_${Date.now()}.csv`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);

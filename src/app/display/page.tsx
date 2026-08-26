@@ -171,7 +171,7 @@ export default function DisplayPage() {
       <header className="flex items-center justify-between px-6 sm:px-10 py-5">
         <div className="flex items-center gap-3">
           <Image src="/logo-icon.png" alt="" width={36} height={36} className="w-9 h-9 rounded-lg object-contain" priority />
-          <span className="text-sm font-semibold text-text-secondary">Pitch Under Pressure</span>
+          <span className="text-sm font-semibold text-text-secondary">The Pitch League</span>
         </div>
         <ConnectionStatus state={connState} />
       </header>
@@ -272,9 +272,9 @@ export default function DisplayPage() {
               className="w-full max-w-3xl text-center space-y-8 relative"
             >
               <HeroShard className="absolute inset-0 -z-[1] opacity-60 pointer-events-none" />
-              <Image src="/logo-icon.png" alt="Pitch Under Pressure" width={120} height={120} className="w-24 h-24 sm:w-32 sm:h-32 mx-auto object-contain relative" priority />
+              <Image src="/logo-icon.png" alt="The Pitch League" width={120} height={120} className="w-24 h-24 sm:w-32 sm:h-32 mx-auto object-contain relative" priority />
               <h1 className="font-display text-4xl sm:text-6xl font-bold tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-brand-500 via-accent-live to-accent-warm relative">
-                PITCH UNDER PRESSURE
+                THE PITCH LEAGUE
               </h1>
               <p className="text-text-secondary text-lg relative">Waiting for the next pitch to begin...</p>
 

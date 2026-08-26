@@ -1,4 +1,4 @@
-# Pitch Under Pressure 🚀
+# The Pitch League 🚀
 
 A real-time live event platform built for college startup pitching competitions at **National Institute of Technology Warangal (NIT Warangal)**.
 

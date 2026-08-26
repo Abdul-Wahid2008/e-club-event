@@ -124,7 +124,7 @@ export default function LandingPage() {
       </main>
 
       <footer className="border-t border-panel-border py-6 text-center text-xs text-text-secondary font-mono">
-        Pitch Under Pressure • Live Competition Arena • National Institute of Technology Warangal
+        The Pitch League • Live Competition Arena • National Institute of Technology Warangal
       </footer>
     </div>
   );

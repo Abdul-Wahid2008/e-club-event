@@ -15,7 +15,7 @@ const spaceGrotesk = Space_Grotesk({
 });
 
 export const metadata: Metadata = {
-  title: 'Pitch Under Pressure | NIT Warangal Startup Competition',
+  title: 'The Pitch League | NIT Warangal Startup Competition',
   description: 'Live pitch scoring, audience pressure-testing, and real-time event portal for NIT Warangal.',
 };
 
