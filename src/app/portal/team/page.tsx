@@ -5,6 +5,7 @@ import Navbar from '@/src/components/Navbar';
 import CountdownTimer from '@/src/components/CountdownTimer';
 import Toast, { ToastMessage } from '@/src/components/Toast';
 import PoolBadge from '@/src/components/PoolBadge';
+import ConnectionStatus, { ConnState } from '@/src/components/ConnectionStatus';
 import { Users, Flame, Send, CheckCircle2, ShieldAlert, Trophy, HelpCircle } from 'lucide-react';
 import { createClient } from '@/src/lib/supabase/client';
 import { EventState, Pitch, Team, Question } from '@/src/lib/types';
@@ -17,6 +18,7 @@ export default function TeamPortalPage() {
   const [nextUpTeam, setNextUpTeam] = useState<Team | null>(null);
   const [myQuestions, setMyQuestions] = useState<Question[]>([]);
   const [loadingTeam, setLoadingTeam] = useState(true);
+  const [connState, setConnState] = useState<ConnState>('connecting');
 
   // Rating Sliders (1-5 scale)
   const [problemRel, setProblemRel] = useState<number>(3);
@@ -104,7 +106,11 @@ export default function TeamPortalPage() {
       .on('postgres_changes', { event: '*', schema: 'public', table: 'event_state' }, () => fetchTeamAndEventData())
       .on('postgres_changes', { event: '*', schema: 'public', table: 'pitches' }, () => fetchTeamAndEventData())
       .on('postgres_changes', { event: '*', schema: 'public', table: 'questions' }, () => fetchTeamAndEventData())
-      .subscribe();
+      .subscribe((status: string) => {
+        if (status === 'SUBSCRIBED') setConnState('connected');
+        else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED') setConnState('reconnecting');
+        else setConnState('connecting');
+      });
 
     return () => {
       supabase.removeChannel(channel);
@@ -181,6 +187,10 @@ export default function TeamPortalPage() {
       <Navbar userRole="team" teamName={myTeam?.team_name} />
 
       <main className="flex-1 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8 w-full">
+        <div className="flex justify-end">
+          <ConnectionStatus state={connState} />
+        </div>
+
         {/* Synced Countdown Timer */}
         <CountdownTimer initialState={eventState || undefined} />
 

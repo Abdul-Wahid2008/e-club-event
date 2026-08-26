@@ -6,6 +6,7 @@ import PitchQueuePanel from '@/src/components/PitchQueuePanel';
 import LiveLeaderboard from '@/src/components/LiveLeaderboard';
 import ManualOverrideModal from '@/src/components/ManualOverrideModal';
 import DataManagementPanel from '@/src/components/DataManagementPanel';
+import ConnectionStatus, { ConnState } from '@/src/components/ConnectionStatus';
 import { triggerConfetti } from '@/src/components/ConfettiEffect';
 import { ShieldAlert, Flame, Users, HelpCircle, Trophy, CheckCircle2, XCircle, Sparkles, FileSpreadsheet, Database } from 'lucide-react';
 import { createClient } from '@/src/lib/supabase/client';
@@ -28,6 +29,7 @@ export default function OrganiserPortalPage() {
   const [auditLogs, setAuditLogs] = useState<ScoreAuditLog[]>([]);
   const [approvedQuestions, setApprovedQuestions] = useState<Question[]>([]);
   const [loadingData, setLoadingData] = useState(true);
+  const [connState, setConnState] = useState<ConnState>('connecting');
 
   const [selectedOverrideEntry, setSelectedOverrideEntry] = useState<PitchLeaderboardEntry | null>(null);
   const [qualifySuccessMsg, setQualifySuccessMsg] = useState<string | null>(null);
@@ -90,7 +92,11 @@ export default function OrganiserPortalPage() {
       .on('postgres_changes', { event: '*', schema: 'public', table: 'questions' }, () => fetchOrganiserData())
       .on('postgres_changes', { event: '*', schema: 'public', table: 'teams' }, () => fetchOrganiserData())
       .on('postgres_changes', { event: '*', schema: 'public', table: 'score_audit_log' }, () => fetchOrganiserData())
-      .subscribe();
+      .subscribe((status: string) => {
+        if (status === 'SUBSCRIBED') setConnState('connected');
+        else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED') setConnState('reconnecting');
+        else setConnState('connecting');
+      });
 
     return () => {
       supabase.removeChannel(channel);
@@ -177,6 +183,10 @@ export default function OrganiserPortalPage() {
       <Navbar userRole="organiser" />
 
       <main className="flex-1 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8 w-full">
+        <div className="flex justify-end">
+          <ConnectionStatus state={connState} />
+        </div>
+
         {/* ORGANISER TABS HEADER */}
         <div className="panel rounded-2xl p-2 flex flex-wrap gap-2">
           {tabs.map((tab) => (
