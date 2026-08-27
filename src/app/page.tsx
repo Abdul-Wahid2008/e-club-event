@@ -6,7 +6,6 @@ import { motion } from 'framer-motion';
 import Navbar from '@/src/components/Navbar';
 import Footer from '@/src/components/Footer';
 import CountdownTimer from '@/src/components/CountdownTimer';
-import RegistrationCounter from '@/src/components/RegistrationCounter';
 import { Flame, Trophy, Users, ShieldAlert, Award, ArrowRight, Zap, Target, MessageSquare } from 'lucide-react';
 import { usePrefersReducedMotion } from '@/src/lib/useReducedMotion';
 
@@ -87,10 +86,6 @@ export default function LandingPage() {
               Join your teammate&apos;s team
             </Link>
           </p>
-
-          <div className="pt-2 flex justify-center">
-            <RegistrationCounter />
-          </div>
         </div>
 
         {/* THREE PORTAL HIGHLIGHTS */}
