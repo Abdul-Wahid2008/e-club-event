@@ -12,7 +12,19 @@ interface CountdownTimerProps {
   onPause?: () => void | Promise<void>;
   onReset?: () => void | Promise<void>;
   onEnd?: () => void | Promise<void>;
+  // Default true (unchanged behavior for every existing caller -- portal
+  // pages and PitchQueuePanel genuinely need sub-second sync during a live
+  // pitch). Set false for a public, pre-login context like the homepage:
+  // every visitor there opening their own persistent Realtime WebSocket
+  // just to show a countdown that isn't even tracking a live pitch is a
+  // real connection-budget risk under a WhatsApp-driven traffic burst --
+  // falls back to a cheap periodic poll instead, which is imperceptible
+  // for a countdown that only needs to be right to the second, not
+  // instantly reactive to another client's action.
+  realtime?: boolean;
 }
+
+const HOMEPAGE_POLL_INTERVAL_MS = 30_000;
 
 export default function CountdownTimer({
   initialState,
@@ -21,6 +33,7 @@ export default function CountdownTimer({
   onPause,
   onReset,
   onEnd,
+  realtime = true,
 }: CountdownTimerProps) {
   const [eventState, setEventState] = useState<EventState | null>(initialState || null);
   const [secondsLeft, setSecondsLeft] = useState<number>(0);
@@ -42,11 +55,12 @@ export default function CountdownTimer({
     return () => clearTimeout(t);
   }, [optimisticStatus]);
 
-  // Subscribe to Supabase Realtime on `event_state`
+  // Subscribe to Supabase Realtime on `event_state` -- or, for a
+  // realtime={false} public context, just poll it periodically instead.
   useEffect(() => {
     const supabase = createClient();
 
-    if (!initialState) {
+    const fetchState = () =>
       supabase
         .from('event_state')
         .select('*')
@@ -55,6 +69,14 @@ export default function CountdownTimer({
         .then(({ data }: any) => {
           if (data) setEventState(data as EventState);
         });
+
+    if (!initialState) {
+      fetchState();
+    }
+
+    if (!realtime) {
+      const interval = setInterval(fetchState, HOMEPAGE_POLL_INTERVAL_MS);
+      return () => clearInterval(interval);
     }
 
     const channel = supabase
@@ -75,7 +97,7 @@ export default function CountdownTimer({
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [initialState]);
+  }, [initialState, realtime]);
 
   // Optimistic-local start timestamp: set the instant Start is clicked, so
   // the countdown can begin ticking from Date.now() before the server's

@@ -42,13 +42,22 @@ const created = { authUsers: [], teamIds: [], pitchIds: [], judgeIds: [] };
 async function main() {
   console.log(`\nPre-event checklist part 2 (run id: ${RUN_ID})\n=== Team registration validation ===`);
 
-  // 1 member -> reject (mirrors registerTeamAction's allEmails.length check)
+  // Solo registration (1 member) -> ACCEPTED as of the solo-registration
+  // feature (mirrors registerTeamAction's current allEmails.length check:
+  // < 1 || > 4, not the old < 2 || > 4). This assertion was stale/testing
+  // the OLD pre-solo-registration rule until fixed here -- it was passing
+  // by hardcoding the old rule locally rather than calling the real code,
+  // which silently drifted from reality and would have kept "passing"
+  // forever even though a real solo registrant now succeeds, not rejects.
+  const zeroMemberEmails = [];
+  step('0-member team still rejected (min 1)', zeroMemberEmails.length < 1 || zeroMemberEmails.length > 4);
+
   const oneMemberEmails = ['solo@example.com'];
-  step('1-member team rejected (min 2)', oneMemberEmails.length < 2 || oneMemberEmails.length > 4);
+  step('1-member (solo) team ACCEPTED (min 1, not min 2)', !(oneMemberEmails.length < 1 || oneMemberEmails.length > 4));
 
   // 5 members -> reject
   const fiveMemberEmails = ['a@example.com', 'b@example.com', 'c@example.com', 'd@example.com', 'e@example.com'];
-  step('5-member team rejected (max 4)', fiveMemberEmails.length < 2 || fiveMemberEmails.length > 4);
+  step('5-member team rejected (max 4)', fiveMemberEmails.length < 1 || fiveMemberEmails.length > 4);
 
   // malformed email -> reject
   const malformedResult = validateTeamMemberEmails(['not-an-email', 'valid@example.com']);

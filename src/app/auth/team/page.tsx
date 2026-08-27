@@ -47,7 +47,7 @@ function TeamAuthPageInner() {
     setLoading(true);
     const formData = new FormData();
     formData.append('email', email);
-    formData.append('company_website', honeypot);
+    formData.append('hp_field_x92k', honeypot);
     if (turnstileToken) formData.append('cf-turnstile-response', turnstileToken);
 
     const res = await requestTeamOtpAction(formData);

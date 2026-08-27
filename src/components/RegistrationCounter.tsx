@@ -5,11 +5,19 @@ import { Flame } from 'lucide-react';
 import { createClient } from '@/src/lib/supabase/client';
 import AnimatedNumber from './AnimatedNumber';
 
+const POLL_INTERVAL_MS = 45_000;
+
 /**
  * Aggregate-only social-proof counter for the homepage. Fetches a head-only
- * COUNT (no team names/rows) and refreshes on Realtime team-table changes --
- * cheap enough to run on every homepage load even during a traffic burst,
- * since it's a single indexed count query, not a full row fetch.
+ * COUNT (no team names/rows) via periodic polling, NOT a Realtime
+ * subscription -- every homepage visitor opening their own persistent
+ * Realtime WebSocket connection just for this counter would, under a
+ * WhatsApp-driven burst of hundreds of simultaneous visitors, eat into
+ * Supabase's Realtime connection budget and risk degrading the portals'
+ * actual live features (scoring/timer updates) during the real event, for
+ * a nice-to-have that doesn't need sub-second freshness. A single cheap
+ * indexed count query every 45s is imperceptible to the visitor and adds
+ * zero persistent-connection load.
  */
 export default function RegistrationCounter() {
   const [count, setCount] = useState<number | null>(null);
@@ -25,15 +33,9 @@ export default function RegistrationCounter() {
     };
 
     fetchCount();
+    const interval = setInterval(fetchCount, POLL_INTERVAL_MS);
 
-    const channel = supabase
-      .channel('homepage_registration_counter')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'teams' }, () => fetchCount())
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(channel);
-    };
+    return () => clearInterval(interval);
   }, []);
 
   if (count === null) return null;

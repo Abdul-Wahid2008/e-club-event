@@ -59,7 +59,7 @@ export default function LandingPage() {
           </p>
 
           <div className="max-w-2xl mx-auto pt-2">
-            <CountdownTimer />
+            <CountdownTimer realtime={false} />
           </div>
 
           <div className="pt-4 flex flex-wrap items-center justify-center gap-4">

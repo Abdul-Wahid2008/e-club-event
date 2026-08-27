@@ -41,16 +41,28 @@ export function validateTeamMemberEmails(emails: string[]): { valid: boolean; in
 
 /**
  * Normalizes an Indian mobile number to bare 10 digits for storage: strips
- * spaces/dashes/parens and an optional leading +91/91/0, then requires
- * exactly 10 digits starting with 6-9 (the valid Indian mobile number
- * range). Returns null if the input doesn't match after normalization --
- * callers should treat null as invalid, never store the raw input.
+ * spaces/dashes/parens/an explicit "+", then requires exactly 10 digits
+ * starting with 6-9 (the valid Indian mobile number range), OPTIONALLY
+ * preceded by a 91 country code or a single leading 0 trunk prefix.
+ *
+ * Only strips the 91/0 prefix when the digit count actually implies one is
+ * present (12 digits for 91+10, or 11 for 0+10) -- a naive "always strip a
+ * leading 91" regex would wrongly mangle a real, valid 10-digit number that
+ * itself starts with "91" (e.g. 9198765432 is a legitimate number, not
+ * "91" + the 8-digit remainder "98765432"). Returns null if the input
+ * doesn't match after normalization -- callers should treat null as
+ * invalid, never store the raw input.
  */
 export function normalizeIndianPhoneNumber(input: string): string | null {
   if (!input || typeof input !== 'string') return null;
 
-  let digits = input.replace(/[\s\-()]/g, '');
-  digits = digits.replace(/^\+?91/, '').replace(/^0/, '');
+  let digits = input.replace(/[\s\-()]/g, '').replace(/^\+/, '');
+
+  if (digits.length === 12 && digits.startsWith('91')) {
+    digits = digits.slice(2);
+  } else if (digits.length === 11 && digits.startsWith('0')) {
+    digits = digits.slice(1);
+  }
 
   if (!/^[6-9]\d{9}$/.test(digits)) return null;
   return digits;

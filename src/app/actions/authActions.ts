@@ -11,7 +11,7 @@ const OTP_REQUEST_COOLDOWN_SECONDS = 15;
 
 export async function requestTeamOtpAction(formData: FormData) {
   const email = formData.get('email') as string;
-  const honeypot = formData.get('company_website') as string | null;
+  const honeypot = formData.get('hp_field_x92k') as string | null;
   const turnstileToken = formData.get('cf-turnstile-response') as string | null;
 
   // Honeypot: reject silently with a success-shaped response so a bot
