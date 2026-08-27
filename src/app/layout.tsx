@@ -15,25 +15,26 @@ const spaceGrotesk = Space_Grotesk({
   display: 'swap',
 });
 
+const OG_TITLE = 'The Pitch League — NIT Warangal';
+const OG_DESCRIPTION = 'Register solo or as a team (no deadline, no cap) for NIT Warangal\'s live startup pitch arena. Auto-assigned domain & pool, real-time judging, and rival teams grilling you with pressure Q&A.';
+
 export const metadata: Metadata = {
   metadataBase: new URL(process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'),
   title: 'The Pitch League | NIT Warangal Startup Competition',
-  description: 'Live pitch scoring, audience pressure-testing, and real-time event portal for NIT Warangal.',
+  description: OG_DESCRIPTION,
   icons: {
     icon: '/favicon-64.png',
     apple: '/logo-icon-optimized.png',
   },
   openGraph: {
-    title: 'The Pitch League',
-    description: 'Live pitch scoring, audience pressure-testing, and real-time event portal for NIT Warangal.',
-    images: ['/logo-icon-optimized.png'],
+    title: OG_TITLE,
+    description: OG_DESCRIPTION,
     type: 'website',
   },
   twitter: {
     card: 'summary_large_image',
-    title: 'The Pitch League',
-    description: 'Live pitch scoring, audience pressure-testing, and real-time event portal for NIT Warangal.',
-    images: ['/logo-icon-optimized.png'],
+    title: OG_TITLE,
+    description: OG_DESCRIPTION,
   },
 };
 
