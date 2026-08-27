@@ -226,19 +226,21 @@ export default function ManageTeamsPanel({ teams, teamMembers, lockedTeamIds, do
                 value={newTeamDomain}
                 onChange={(e) => setNewTeamDomain(e.target.value)}
                 className="bg-white/5 border border-panel-border rounded-lg px-3 py-2 text-xs text-text-primary focus:outline-none focus:border-brand-500"
+                style={{ backgroundColor: '#0D111C', color: '#F7F8FC' }}
               >
-                <option value="">Select domain...</option>
+                <option value="" style={{ backgroundColor: '#0D111C', color: '#F7F8FC' }}>Select domain...</option>
                 {domains.map((d) => (
-                  <option key={d.id} value={d.name}>{d.name}</option>
+                  <option key={d.id} value={d.name} style={{ backgroundColor: '#0D111C', color: '#F7F8FC' }}>{d.name}</option>
                 ))}
               </select>
               <select
                 value={newTeamPool}
                 onChange={(e) => setNewTeamPool(e.target.value as 'A' | 'B')}
                 className="bg-white/5 border border-panel-border rounded-lg px-3 py-2 text-xs text-text-primary focus:outline-none focus:border-brand-500"
+                style={{ backgroundColor: '#0D111C', color: '#F7F8FC' }}
               >
-                <option value="A">Pool A</option>
-                <option value="B">Pool B</option>
+                <option value="A" style={{ backgroundColor: '#0D111C', color: '#F7F8FC' }}>Pool A</option>
+                <option value="B" style={{ backgroundColor: '#0D111C', color: '#F7F8FC' }}>Pool B</option>
               </select>
             </div>
             <div className="flex gap-2">
@@ -436,13 +438,14 @@ export default function ManageTeamsPanel({ teams, teamMembers, lockedTeamIds, do
               value={moveMemberId}
               onChange={(e) => setMoveMemberId(e.target.value)}
               className="w-full bg-white/5 border border-panel-border rounded-lg px-3 py-2 text-xs text-text-primary focus:outline-none focus:border-brand-500"
+              style={{ backgroundColor: '#0D111C', color: '#F7F8FC' }}
             >
-              <option value="">Select member...</option>
+              <option value="" style={{ backgroundColor: '#0D111C', color: '#F7F8FC' }}>Select member...</option>
               {teamMembers.map((m) => {
                 const t = teams.find((team) => team.id === m.team_id);
                 const disabled = t ? lockedTeamIds.has(t.id) : false;
                 return (
-                  <option key={m.id} value={m.id} disabled={disabled}>
+                  <option key={m.id} value={m.id} disabled={disabled} style={{ backgroundColor: '#0D111C', color: '#F7F8FC' }}>
                     {m.name} ({t?.team_name}){disabled ? ' — locked' : ''}
                   </option>
                 );
@@ -455,13 +458,14 @@ export default function ManageTeamsPanel({ teams, teamMembers, lockedTeamIds, do
               value={moveDestTeamId}
               onChange={(e) => setMoveDestTeamId(e.target.value)}
               className="w-full bg-white/5 border border-panel-border rounded-lg px-3 py-2 text-xs text-text-primary focus:outline-none focus:border-brand-500"
+              style={{ backgroundColor: '#0D111C', color: '#F7F8FC' }}
             >
-              <option value="">Select team...</option>
+              <option value="" style={{ backgroundColor: '#0D111C', color: '#F7F8FC' }}>Select team...</option>
               {teams.map((t) => {
                 const memberCount = (membersByTeam.get(t.id) || []).length;
                 const disabled = lockedTeamIds.has(t.id) || memberCount >= 4;
                 return (
-                  <option key={t.id} value={t.id} disabled={disabled}>
+                  <option key={t.id} value={t.id} disabled={disabled} style={{ backgroundColor: '#0D111C', color: '#F7F8FC' }}>
                     {t.team_name} ({memberCount}/4){disabled ? (lockedTeamIds.has(t.id) ? ' — locked' : ' — full') : ''}
                   </option>
                 );
@@ -491,10 +495,11 @@ export default function ManageTeamsPanel({ teams, teamMembers, lockedTeamIds, do
               value={mergeSourceId}
               onChange={(e) => { setMergeSourceId(e.target.value); setMergeKeepDomain(''); }}
               className="w-full bg-white/5 border border-panel-border rounded-lg px-3 py-2 text-xs text-text-primary focus:outline-none focus:border-brand-500"
+              style={{ backgroundColor: '#0D111C', color: '#F7F8FC' }}
             >
-              <option value="">Select team...</option>
+              <option value="" style={{ backgroundColor: '#0D111C', color: '#F7F8FC' }}>Select team...</option>
               {teams.map((t) => (
-                <option key={t.id} value={t.id} disabled={lockedTeamIds.has(t.id)}>
+                <option key={t.id} value={t.id} disabled={lockedTeamIds.has(t.id)} style={{ backgroundColor: '#0D111C', color: '#F7F8FC' }}>
                   {t.team_name}{lockedTeamIds.has(t.id) ? ' — locked' : ''}
                 </option>
               ))}
@@ -506,10 +511,11 @@ export default function ManageTeamsPanel({ teams, teamMembers, lockedTeamIds, do
               value={mergeDestId}
               onChange={(e) => { setMergeDestId(e.target.value); setMergeKeepDomain(''); }}
               className="w-full bg-white/5 border border-panel-border rounded-lg px-3 py-2 text-xs text-text-primary focus:outline-none focus:border-brand-500"
+              style={{ backgroundColor: '#0D111C', color: '#F7F8FC' }}
             >
-              <option value="">Select team...</option>
+              <option value="" style={{ backgroundColor: '#0D111C', color: '#F7F8FC' }}>Select team...</option>
               {teams.map((t) => (
-                <option key={t.id} value={t.id} disabled={lockedTeamIds.has(t.id)}>
+                <option key={t.id} value={t.id} disabled={lockedTeamIds.has(t.id)} style={{ backgroundColor: '#0D111C', color: '#F7F8FC' }}>
                   {t.team_name}{lockedTeamIds.has(t.id) ? ' — locked' : ''}
                 </option>
               ))}
