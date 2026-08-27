@@ -20,6 +20,7 @@ export interface Team {
   domain: string;
   pool: 'A' | 'B';
   status: string;
+  join_code: string | null;
   created_at: string;
 }
 
@@ -158,6 +159,20 @@ export interface ScoreAuditLog {
   old_value: any;
   new_value: any;
   note: string;
+  timestamp: string;
+}
+
+export type RosterAuditAction = 'move_member' | 'merge_teams' | 'create_team' | 'join_via_code';
+
+export interface RosterAuditLog {
+  id: string;
+  changed_by: string;
+  action: RosterAuditAction;
+  affected_team_ids: string[];
+  affected_member_id: string | null;
+  old_value: any;
+  new_value: any;
+  note: string | null;
   timestamp: string;
 }
 

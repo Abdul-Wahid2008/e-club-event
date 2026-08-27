@@ -16,6 +16,7 @@
     "pre-event-check": "npm run smoke-test && npm run test-double-submit && npm run test-judge-lock && npm run test-checklist-1 && npm run test-checklist-2 && npm run test-load-resilience && npm run build && npm run lint"
   },
   "dependencies": {
+    "@marsidev/react-turnstile": "^1.6.1",
     "@react-three/drei": "^9.114.3",
     "@react-three/fiber": "^8.17.10",
     "@supabase/ssr": "^0.5.1",
@@ -23,11 +24,13 @@
     "@vercel/speed-insights": "^2.0.0",
     "canvas-confetti": "1.9.3",
     "clsx": "2.1.1",
+    "disposable-email-domains": "^1.0.62",
     "framer-motion": "11.11.10",
     "lucide-react": "0.453.0",
     "next": "^14.2.35",
     "react": "18.3.1",
     "react-dom": "18.3.1",
+    "server-only": "^0.0.1",
     "tailwind-merge": "2.5.4",
     "three": "^0.169.0"
   },

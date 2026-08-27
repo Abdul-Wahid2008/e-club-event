@@ -1,19 +1,37 @@
 'use client';
 
-import { useState } from 'react';
+import { Suspense, useState } from 'react';
 import Navbar from '@/src/components/Navbar';
 import Footer from '@/src/components/Footer';
 import Toast, { ToastMessage } from '@/src/components/Toast';
-import { Mail, KeyRound, ArrowRight } from 'lucide-react';
+import HoneypotField from '@/src/components/HoneypotField';
+import TurnstileWidget from '@/src/components/TurnstileWidget';
+import { Mail, KeyRound, ArrowRight, UserPlus, Users2 } from 'lucide-react';
 import { requestTeamOtpAction, verifyTeamOtpAction } from '@/src/app/actions/authActions';
 import { isValidEmailFormat } from '@/src/lib/validation';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
+
+type Intent = 'register' | 'join';
 
 export default function TeamAuthPage() {
+  return (
+    <Suspense fallback={null}>
+      <TeamAuthPageInner />
+    </Suspense>
+  );
+}
+
+function TeamAuthPageInner() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const initialIntent: Intent = searchParams.get('intent') === 'join' ? 'join' : 'register';
+
+  const [intent, setIntent] = useState<Intent>(initialIntent);
   const [step, setStep] = useState<'request' | 'verify'>('request');
   const [email, setEmail] = useState('');
   const [otpToken, setOtpToken] = useState('');
+  const [honeypot, setHoneypot] = useState('');
+  const [turnstileToken, setTurnstileToken] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState<ToastMessage | null>(null);
 
@@ -21,7 +39,6 @@ export default function TeamAuthPage() {
     e.preventDefault();
     setMessage(null);
 
-    // Client-side format check (any email domain allowed for teams)
     if (!isValidEmailFormat(email)) {
       setMessage({ type: 'error', text: 'Please enter a valid email address.' });
       return;
@@ -30,6 +47,8 @@ export default function TeamAuthPage() {
     setLoading(true);
     const formData = new FormData();
     formData.append('email', email);
+    formData.append('company_website', honeypot);
+    if (turnstileToken) formData.append('cf-turnstile-response', turnstileToken);
 
     const res = await requestTeamOtpAction(formData);
     setLoading(false);
@@ -37,7 +56,7 @@ export default function TeamAuthPage() {
     if (res.error) {
       setMessage({ type: 'error', text: res.error });
     } else {
-      setMessage({ type: 'success', text: 'Code sent to your inbox! Enter it below to sign in or complete registration.' });
+      setMessage({ type: 'success', text: 'Code sent to your inbox! Enter it below to continue.' });
       setStep('verify');
     }
   };
@@ -59,6 +78,8 @@ export default function TeamAuthPage() {
       setMessage({ type: 'error', text: res.error });
     } else if (res.isReturningTeam) {
       router.push('/portal/team');
+    } else if (intent === 'join') {
+      router.push('/join-team');
     } else {
       router.push('/register-team');
     }
@@ -80,13 +101,40 @@ export default function TeamAuthPage() {
             </p>
           </div>
 
+          {step === 'request' && (
+            <div className="grid grid-cols-2 gap-2 p-1 rounded-xl bg-white/[0.03] border border-panel-border">
+              <button
+                type="button"
+                onClick={() => setIntent('register')}
+                className={`flex items-center justify-center space-x-1.5 py-2 rounded-lg text-xs font-bold transition-colors ${
+                  intent === 'register' ? 'bg-brand-500 text-white shadow-brand-glow' : 'text-text-secondary hover:text-text-primary'
+                }`}
+              >
+                <UserPlus className="w-3.5 h-3.5" />
+                <span>Register</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setIntent('join')}
+                className={`flex items-center justify-center space-x-1.5 py-2 rounded-lg text-xs font-bold transition-colors ${
+                  intent === 'join' ? 'bg-brand-500 text-white shadow-brand-glow' : 'text-text-secondary hover:text-text-primary'
+                }`}
+              >
+                <Users2 className="w-3.5 h-3.5" />
+                <span>Join a Team</span>
+              </button>
+            </div>
+          )}
+
           <Toast message={message} />
 
           {step === 'request' ? (
             <form onSubmit={handleRequestOtp} className="space-y-4">
+              <HoneypotField value={honeypot} onChange={setHoneypot} />
+
               <div>
                 <label className="block text-xs font-semibold text-text-secondary mb-1.5 uppercase tracking-wider">
-                  Leader Email
+                  {intent === 'join' ? 'Your Email' : 'Leader Email'}
                 </label>
                 <div className="relative">
                   <Mail className="w-4 h-4 text-text-secondary absolute left-3.5 top-3.5" />
@@ -100,6 +148,8 @@ export default function TeamAuthPage() {
                   />
                 </div>
               </div>
+
+              <TurnstileWidget onToken={setTurnstileToken} />
 
               <button
                 type="submit"

@@ -3,17 +3,37 @@
 import { createClient } from '@/src/lib/supabase/server';
 import { createAdminClient } from '@/src/lib/supabase/admin';
 import { isValidStaffEmail, isValidEmailFormat, validateTeamMemberEmails } from '@/src/lib/validation';
+import { isDisposableEmail } from '@/src/lib/disposableEmail.server';
+import { verifyTurnstileToken, isHoneypotTripped, friendlyErrorMessage } from '@/src/lib/antiAbuse';
 import { redirect } from 'next/navigation';
 
 const OTP_REQUEST_COOLDOWN_SECONDS = 15;
 
 export async function requestTeamOtpAction(formData: FormData) {
   const email = formData.get('email') as string;
+  const honeypot = formData.get('company_website') as string | null;
+  const turnstileToken = formData.get('cf-turnstile-response') as string | null;
+
+  // Honeypot: reject silently with a success-shaped response so a bot
+  // filling every field (including the hidden one) never learns why it
+  // failed -- it just never receives a working OTP.
+  if (isHoneypotTripped(honeypot)) {
+    return { success: true, email: (email || '').trim().toLowerCase() };
+  }
 
   if (!email || !isValidEmailFormat(email)) {
     return { error: 'Please provide a valid email address.' };
   }
   const normalizedEmail = email.trim().toLowerCase();
+
+  if (isDisposableEmail(normalizedEmail)) {
+    return { error: 'Please use a real, non-disposable email address to register.' };
+  }
+
+  const turnstileResult = await verifyTurnstileToken(turnstileToken);
+  if (!turnstileResult.success) {
+    return { error: turnstileResult.error || 'Verification failed. Please try again.' };
+  }
 
   const adminSupabase = createAdminClient();
 
@@ -62,7 +82,18 @@ export async function requestTeamOtpAction(formData: FormData) {
   });
 
   if (error) {
-    return { error: error.message };
+    // Supabase Auth's own send path proxies through its configured email
+    // provider (Brevo here) -- during a WhatsApp-driven registration burst,
+    // either Supabase's or Brevo's free-tier plan limits can be hit before
+    // ours. Surface a friendly retry message instead of a raw provider
+    // error/stack, since the real fix (a tier upgrade) is a cost decision,
+    // not something a user retry can solve mid-burst.
+    const isRateLimited = /rate limit|too many requests|429/i.test(error.message);
+    return {
+      error: isRateLimited
+        ? "We're seeing high demand right now. Please wait a minute and try again."
+        : error.message,
+    };
   }
 
   await adminSupabase
@@ -129,15 +160,29 @@ export async function registerTeamAction(payload: {
   leaderName: string;
   leaderEmail: string;
   members: { name: string; email: string }[];
+  honeypot?: string;
+  turnstileToken?: string;
 }) {
-  const { teamName, leaderName, leaderEmail, members } = payload;
+  const { teamName, leaderName, leaderEmail, members, honeypot, turnstileToken } = payload;
+
+  // Honeypot: reject silently -- return the same shape a real submission
+  // would produce on the FIRST failure path a bot is likely to hit (a
+  // generic error), never a message that reveals a hidden field exists.
+  if (isHoneypotTripped(honeypot)) {
+    return { error: 'Registration failed. Please try again.' };
+  }
+
+  const turnstileResult = await verifyTurnstileToken(turnstileToken);
+  if (!turnstileResult.success) {
+    return { error: turnstileResult.error || 'Verification failed. Please try again.' };
+  }
 
   // 1. Collect all member emails including leader
   const allEmails = [leaderEmail, ...members.map((m) => m.email)];
-  
-  // 2. Validate team size (2 to 4 members total)
-  if (allEmails.length < 2 || allEmails.length > 4) {
-    return { error: 'A team must have between 2 and 4 total members.' };
+
+  // 2. Validate team size (1 to 4 members total -- solo registration allowed)
+  if (allEmails.length < 1 || allEmails.length > 4) {
+    return { error: 'A team must have between 1 and 4 total members.' };
   }
 
   // 3. SERVER-SIDE VALIDATION: Check EVERY member email is a syntactically valid address (any domain allowed)
@@ -146,6 +191,11 @@ export async function registerTeamAction(payload: {
     return {
       error: `All team member emails must be valid. Invalid emails found: ${validation.invalidEmails.join(', ')}`,
     };
+  }
+
+  const disposable = allEmails.filter((e) => isDisposableEmail(e));
+  if (disposable.length > 0) {
+    return { error: `Please use real, non-disposable email addresses. Rejected: ${disposable.join(', ')}` };
   }
 
   const supabase = createClient();
@@ -205,7 +255,7 @@ export async function registerTeamAction(payload: {
   // pick the same domain without seeing each other's increment.
   const { data: domainResult, error: domainErr } = await adminSupabase.rpc('assign_least_used_domain');
   if (domainErr || !domainResult) {
-    return { error: 'Failed to assign a domain.' };
+    return { error: friendlyErrorMessage(domainErr?.message) };
   }
   const assignedDomain = domainResult as string;
 
@@ -215,9 +265,17 @@ export async function registerTeamAction(payload: {
   // countA <= countB read-then-write check, which had a race window).
   const { data: seqResult, error: seqErr } = await adminSupabase.rpc('next_pool_assignment');
   if (seqErr || !seqResult) {
-    return { error: 'Failed to assign a pool.' };
+    return { error: friendlyErrorMessage(seqErr?.message) };
   }
   const assignedPool = seqResult as 'A' | 'B';
+
+  // 5b. Generate a short human-shareable join code so teammates can join
+  // this team later without the leader needing every email up front.
+  const { data: joinCodeResult, error: joinCodeErr } = await adminSupabase.rpc('generate_team_join_code');
+  if (joinCodeErr || !joinCodeResult) {
+    return { error: friendlyErrorMessage(joinCodeErr?.message) };
+  }
+  const joinCode = joinCodeResult as string;
 
   // 6. Insert Team
   const { data: team, error: teamErr } = await adminSupabase
@@ -228,6 +286,7 @@ export async function registerTeamAction(payload: {
       domain: assignedDomain,
       pool: assignedPool,
       status: 'registered',
+      join_code: joinCode,
     })
     .select()
     .single();
@@ -239,7 +298,7 @@ export async function registerTeamAction(payload: {
       }
       return { error: 'A team with this name is already registered.' };
     }
-    return { error: teamErr?.message || 'Failed to create team.' };
+    return { error: friendlyErrorMessage(teamErr?.message) };
   }
 
   // 7. Insert Team Members
@@ -277,6 +336,110 @@ export async function registerTeamAction(payload: {
     domain: assignedDomain,
     pool: assignedPool,
   };
+}
+
+/**
+ * Adds the currently-authenticated (OTP-verified) user as a member of the
+ * team identified by joinCode. Reuses the same one-team-per-email
+ * guarantees as registerTeamAction: teams_auth_user_id_unique blocks
+ * joining a second team on this identity, and team_members_email_unique
+ * blocks the same email being a member of two teams (e.g. registered solo
+ * elsewhere, or added by an Organiser to a third team). The 4-member cap
+ * is enforced by the trg_enforce_team_member_cap DB trigger (advisory-
+ * locked per team_id) so concurrent joins can't overshoot it.
+ */
+export async function joinTeamWithCodeAction(payload: {
+  joinCode: string;
+  memberName: string;
+  honeypot?: string;
+}) {
+  const { joinCode, memberName, honeypot } = payload;
+
+  if (isHoneypotTripped(honeypot)) {
+    return { error: 'Unable to join this team. Please try again.' };
+  }
+
+  const normalizedCode = (joinCode || '').trim().toUpperCase();
+  if (!normalizedCode) {
+    return { error: 'Please enter a join code.' };
+  }
+
+  const supabase = createClient();
+  const adminSupabase = createAdminClient();
+
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user || !user.email) {
+    return { error: 'Please verify your email first.' };
+  }
+
+  // Block one identity from being on two teams, same guarantee as
+  // registerTeamAction's 3b check.
+  const { data: existingTeam } = await adminSupabase
+    .from('teams')
+    .select('id, team_name')
+    .eq('auth_user_id', user.id)
+    .maybeSingle();
+
+  if (existingTeam) {
+    return { error: `You are already registered with team "${existingTeam.team_name}". Each account may belong to only one team.` };
+  }
+
+  const { data: targetTeam, error: teamLookupErr } = await adminSupabase
+    .from('teams')
+    .select('id, team_name')
+    .eq('join_code', normalizedCode)
+    .maybeSingle();
+
+  if (teamLookupErr || !targetTeam) {
+    return { error: 'That join code was not found. Please double-check it and try again.' };
+  }
+
+  const { count: memberCount } = await adminSupabase
+    .from('team_members')
+    .select('id', { count: 'exact', head: true })
+    .eq('team_id', targetTeam.id);
+
+  if ((memberCount ?? 0) >= 4) {
+    return { error: 'team_full', teamName: targetTeam.team_name };
+  }
+
+  const { data: lockedPitch } = await adminSupabase
+    .from('pitches')
+    .select('id')
+    .eq('team_id', targetTeam.id)
+    .in('queue_status', ['called', 'pitching', 'awaiting_score', 'scored'])
+    .maybeSingle();
+
+  if (lockedPitch) {
+    return { error: `Team "${targetTeam.team_name}" has already been called to stage and can no longer accept new members.` };
+  }
+
+  const { error: insertErr } = await adminSupabase.from('team_members').insert({
+    team_id: targetTeam.id,
+    name: memberName,
+    email: user.email,
+    is_leader: false,
+  });
+
+  if (insertErr) {
+    if (insertErr.code === '23505') {
+      return { error: 'This email is already registered as a member of another team.' };
+    }
+    if (insertErr.message?.includes('TEAM_FULL')) {
+      return { error: 'team_full', teamName: targetTeam.team_name };
+    }
+    return { error: insertErr.message || 'Failed to join the team.' };
+  }
+
+  await adminSupabase.from('roster_audit_log').insert({
+    changed_by: user.id,
+    action: 'join_via_code',
+    affected_team_ids: [targetTeam.id],
+    new_value: { email: user.email, name: memberName, team_name: targetTeam.team_name },
+    note: `Joined via team join code ${normalizedCode}.`,
+  });
+
+  return { success: true, teamName: targetTeam.team_name };
 }
 
 export async function staffLoginAction(formData: FormData) {

@@ -6,6 +6,7 @@ import { motion } from 'framer-motion';
 import Navbar from '@/src/components/Navbar';
 import Footer from '@/src/components/Footer';
 import CountdownTimer from '@/src/components/CountdownTimer';
+import RegistrationCounter from '@/src/components/RegistrationCounter';
 import { Flame, Trophy, Users, ShieldAlert, Award, ArrowRight, Zap, Target, MessageSquare } from 'lucide-react';
 import { usePrefersReducedMotion } from '@/src/lib/useReducedMotion';
 
@@ -78,6 +79,17 @@ export default function LandingPage() {
               <Award className="w-4 h-4 text-accent-warm" />
               <span>Judge & Organiser Login</span>
             </Link>
+          </div>
+
+          <p className="text-xs text-text-secondary">
+            Already have a join code?{' '}
+            <Link href="/auth/team?intent=join" className="text-brand-500 font-semibold hover:underline">
+              Join your teammate&apos;s team
+            </Link>
+          </p>
+
+          <div className="pt-2 flex justify-center">
+            <RegistrationCounter />
           </div>
         </div>
 
