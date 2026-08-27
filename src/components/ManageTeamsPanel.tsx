@@ -1,7 +1,7 @@
 'use client';
 
-import { useState, useMemo } from 'react';
-import { Users, UserPlus, GitMerge, Lock, ArrowRightLeft, Plus, Phone } from 'lucide-react';
+import { useState, useMemo, useRef } from 'react';
+import { Users, UserPlus, GitMerge, Lock, ArrowRightLeft, Plus, Phone, GripVertical } from 'lucide-react';
 import Toast, { ToastMessage } from '@/src/components/Toast';
 import PoolBadge from '@/src/components/PoolBadge';
 import { Team, TeamMember, RosterAuditLog, TeamContactInfo } from '@/src/lib/types';
@@ -23,6 +23,16 @@ export default function ManageTeamsPanel({ teams, teamMembers, lockedTeamIds, do
 
   const [moveMemberId, setMoveMemberId] = useState('');
   const [moveDestTeamId, setMoveDestTeamId] = useState('');
+
+  // Drag-and-drop board state: which member is currently being dragged, and
+  // which team card the pointer is currently hovering over (for a visual
+  // drop-target highlight). draggedMemberId also doubles as the dataTransfer
+  // payload's source of truth -- dataTransfer.getData is unreliable during
+  // dragover in some browsers, so the actual move logic reads this ref
+  // instead of relying on the drop event's dataTransfer contents.
+  const [draggedMemberId, setDraggedMemberId] = useState<string | null>(null);
+  const [dragOverTeamId, setDragOverTeamId] = useState<string | null>(null);
+  const draggingRef = useRef<string | null>(null);
 
   const [mergeSourceId, setMergeSourceId] = useState('');
   const [mergeDestId, setMergeDestId] = useState('');
@@ -54,14 +64,18 @@ export default function ManageTeamsPanel({ teams, teamMembers, lockedTeamIds, do
   const domainMismatch = sourceTeam && destTeam && sourceTeam.domain !== destTeam.domain;
   const poolMismatch = sourceTeam && destTeam && sourceTeam.pool !== destTeam.pool;
 
-  const handleMove = async () => {
-    if (!moveMemberId || !moveDestTeamId) {
-      setMessage({ type: 'error', text: 'Select both a member and a destination team.' });
-      return;
-    }
+  // Shared by both the drag-and-drop board and the select-based fallback
+  // below it, so a move made either way gets identical validation,
+  // messaging, and audit-log behavior (moveTeamMemberAction itself re-checks
+  // the 4-member cap and roster lock server-side regardless of which UI
+  // path triggered it).
+  const performMove = async (memberId: string, destinationTeamId: string) => {
+    const member = teamMembers.find((m) => m.id === memberId);
+    if (member && member.team_id === destinationTeamId) return;
+
     setLoading(true);
     setMessage(null);
-    const res = await moveTeamMemberAction({ memberId: moveMemberId, destinationTeamId: moveDestTeamId });
+    const res = await moveTeamMemberAction({ memberId, destinationTeamId });
     setLoading(false);
     if (res.error) {
       setMessage({ type: 'error', text: res.error });
@@ -71,6 +85,56 @@ export default function ManageTeamsPanel({ teams, teamMembers, lockedTeamIds, do
       setMoveDestTeamId('');
       onDataChange();
     }
+  };
+
+  const handleMove = () => {
+    if (!moveMemberId || !moveDestTeamId) {
+      setMessage({ type: 'error', text: 'Select both a member and a destination team.' });
+      return;
+    }
+    performMove(moveMemberId, moveDestTeamId);
+  };
+
+  const handleDragStart = (memberId: string, sourceTeamId: string) => (e: React.DragEvent) => {
+    if (lockedTeamIds.has(sourceTeamId)) {
+      e.preventDefault();
+      return;
+    }
+    draggingRef.current = memberId;
+    setDraggedMemberId(memberId);
+    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('text/plain', memberId);
+  };
+
+  const handleDragEnd = () => {
+    draggingRef.current = null;
+    setDraggedMemberId(null);
+    setDragOverTeamId(null);
+  };
+
+  const handleDragOverTeam = (teamId: string) => (e: React.DragEvent) => {
+    if (!draggingRef.current) return;
+    if (lockedTeamIds.has(teamId)) return;
+    const memberCount = (membersByTeam.get(teamId) || []).length;
+    const draggedMember = teamMembers.find((m) => m.id === draggingRef.current);
+    // Already-full destination is still a valid dragover target visually
+    // (so the user gets the "team full" error from the server on drop
+    // rather than a confusing no-op), UNLESS it's the member's own current
+    // team, which is always a no-op drop.
+    if (draggedMember?.team_id === teamId) return;
+    e.preventDefault();
+    e.dataTransfer.dropEffect = memberCount >= 4 ? 'none' : 'move';
+    setDragOverTeamId(teamId);
+  };
+
+  const handleDropOnTeam = (teamId: string) => (e: React.DragEvent) => {
+    e.preventDefault();
+    setDragOverTeamId(null);
+    const memberId = draggingRef.current || e.dataTransfer.getData('text/plain');
+    draggingRef.current = null;
+    setDraggedMemberId(null);
+    if (!memberId) return;
+    performMove(memberId, teamId);
   };
 
   const handleMerge = async () => {
@@ -270,11 +334,100 @@ export default function ManageTeamsPanel({ teams, teamMembers, lockedTeamIds, do
         </div>
       </div>
 
-      {/* MOVE MEMBER */}
+      {/* DRAG-AND-DROP BOARD: drag any member's pill onto another team's
+          card to move them there. Multiple members (from the same or
+          different teams) can be moved one after another, in any order --
+          each drag is an independent performMove call, there's no "commit"
+          step. Locked teams render dimmed and are not valid drop targets
+          (their members also can't be picked up). The select-based flow
+          below remains as a guaranteed-reliable fallback if a drag
+          interaction ever misbehaves on a given browser/device. */}
+      <div className="card rounded-2xl p-6 space-y-4">
+        <div>
+          <h2 className="text-xl font-bold text-text-primary flex items-center space-x-2">
+            <GripVertical className="w-5 h-5 text-brand-500" />
+            <span>Drag & Drop Board</span>
+          </h2>
+          <p className="text-xs text-text-secondary">Drag a member&apos;s name onto another team&apos;s card to move them there. Works across any teams, any number of times.</p>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+          {teams.map((t) => {
+            const members = membersByTeam.get(t.id) || [];
+            const locked = lockedTeamIds.has(t.id);
+            const isDragOver = dragOverTeamId === t.id;
+            const isFull = members.length >= 4;
+
+            return (
+              <div
+                key={t.id}
+                onDragOver={handleDragOverTeam(t.id)}
+                onDragLeave={() => setDragOverTeamId((cur) => (cur === t.id ? null : cur))}
+                onDrop={handleDropOnTeam(t.id)}
+                className={`rounded-xl border p-3.5 space-y-2 transition-colors min-h-[120px] ${
+                  locked
+                    ? 'opacity-50 border-panel-border bg-white/[0.02]'
+                    : isDragOver
+                      ? isFull
+                        ? 'border-danger-500 bg-danger-500/10'
+                        : 'border-brand-500 bg-brand-500/10'
+                      : 'border-panel-border bg-white/[0.03]'
+                }`}
+              >
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-bold text-text-primary truncate">{t.team_name}</span>
+                  <span className="text-[10px] font-mono text-text-secondary shrink-0 ml-2">{members.length}/4</span>
+                </div>
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  <PoolBadge pool={t.pool} />
+                  <span className="text-[10px] text-accent-warm font-mono truncate">{t.domain}</span>
+                </div>
+
+                {locked && (
+                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[9px] font-bold bg-accent-live/15 text-accent-live border border-accent-live/40">
+                    <Lock className="w-2.5 h-2.5" />
+                    Locked
+                  </span>
+                )}
+
+                <div className="space-y-1 pt-1">
+                  {members.length === 0 && (
+                    <span className="text-[10px] italic text-text-secondary/60">No members — drop someone here</span>
+                  )}
+                  {members.map((m) => (
+                    <div
+                      key={m.id}
+                      draggable={!locked}
+                      onDragStart={handleDragStart(m.id, t.id)}
+                      onDragEnd={handleDragEnd}
+                      className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[11px] border transition-opacity ${
+                        locked
+                          ? 'cursor-not-allowed bg-white/[0.02] border-panel-border text-text-secondary/50'
+                          : `cursor-grab active:cursor-grabbing bg-white/5 border-panel-border text-text-primary hover:border-brand-500/50 ${
+                              draggedMemberId === m.id ? 'opacity-30' : ''
+                            }`
+                      }`}
+                    >
+                      <GripVertical className="w-3 h-3 text-text-secondary/50 shrink-0" />
+                      <span className="truncate">{m.name}</span>
+                      {m.is_leader && <span className="text-brand-500 font-bold shrink-0">★</span>}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            );
+          })}
+          {teams.length === 0 && (
+            <p className="text-xs text-text-secondary/70 italic col-span-full text-center py-6">No teams registered yet.</p>
+          )}
+        </div>
+      </div>
+
+      {/* MOVE MEMBER (select-based fallback) */}
       <div className="card rounded-2xl p-6 space-y-4">
         <h2 className="text-xl font-bold text-text-primary flex items-center space-x-2">
           <ArrowRightLeft className="w-5 h-5 text-brand-500" />
-          <span>Move a Member Between Teams</span>
+          <span>Move a Member Between Teams (fallback)</span>
         </h2>
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 items-end">
           <div>

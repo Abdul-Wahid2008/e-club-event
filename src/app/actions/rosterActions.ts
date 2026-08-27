@@ -171,6 +171,26 @@ export async function mergeTeamsAction(payload: {
     if (moveErr) return { error: moveErr.message || 'Failed to move members during merge.' };
   }
 
+  // 1b. Carry over the source team's phone number if the destination
+  // doesn't already have one -- team_contact_info.team_id has an ON DELETE
+  // CASCADE from teams, so once the source team is deleted below its
+  // contact row (and the source registrant's only phone number) would be
+  // silently lost otherwise. The destination's own number, if it has one,
+  // always wins -- never silently overwritten.
+  const [{ data: sourceContact }, { data: destContact }] = await Promise.all([
+    adminSupabase.from('team_contact_info').select('phone_number').eq('team_id', sourceTeamId).maybeSingle(),
+    adminSupabase.from('team_contact_info').select('phone_number').eq('team_id', destinationTeamId).maybeSingle(),
+  ]);
+
+  let carriedOverPhone: string | null = null;
+  if (!destContact?.phone_number && sourceContact?.phone_number) {
+    const { error: contactErr } = await adminSupabase
+      .from('team_contact_info')
+      .insert({ team_id: destinationTeamId, phone_number: sourceContact.phone_number });
+    if (contactErr) return { error: contactErr.message || 'Failed to carry over phone number during merge.' };
+    carriedOverPhone = sourceContact.phone_number;
+  }
+
   // 2. Apply the explicitly chosen domain/pool to the destination team.
   const { error: updateDestErr } = await adminSupabase
     .from('teams')
@@ -178,8 +198,9 @@ export async function mergeTeamsAction(payload: {
     .eq('id', destinationTeamId);
   if (updateDestErr) return { error: updateDestErr.message || 'Failed to update merged team.' };
 
-  // 3. Delete the now-empty source team (cascades to its pitch/scores via
-  // existing FK ON DELETE CASCADE).
+  // 3. Delete the now-empty source team (cascades to its pitch/scores/
+  // contact info via existing FK ON DELETE CASCADE -- the phone number, if
+  // any, has already been copied above before this fires).
   const { error: deleteErr } = await adminSupabase.from('teams').delete().eq('id', sourceTeamId);
   if (deleteErr) return { error: deleteErr.message || 'Failed to delete source team after merge.' };
 
@@ -188,11 +209,12 @@ export async function mergeTeamsAction(payload: {
     action: 'merge_teams',
     affected_team_ids: [sourceTeamId, destinationTeamId],
     old_value: {
-      source: { team_name: sourceTeam.team_name, domain: sourceTeam.domain, pool: sourceTeam.pool },
-      destination: { team_name: destTeam.team_name, domain: destTeam.domain, pool: destTeam.pool },
+      source: { team_name: sourceTeam.team_name, domain: sourceTeam.domain, pool: sourceTeam.pool, phone_number: sourceContact?.phone_number ?? null },
+      destination: { team_name: destTeam.team_name, domain: destTeam.domain, pool: destTeam.pool, phone_number: destContact?.phone_number ?? null },
     },
-    new_value: { team_name: destTeam.team_name, domain: payload.keepDomain, pool: payload.keepPool },
-    note: `Merged "${sourceTeam.team_name}" into "${destTeam.team_name}". Kept domain="${payload.keepDomain}", pool="${payload.keepPool}".`,
+    new_value: { team_name: destTeam.team_name, domain: payload.keepDomain, pool: payload.keepPool, phone_number: destContact?.phone_number ?? carriedOverPhone ?? null },
+    note: `Merged "${sourceTeam.team_name}" into "${destTeam.team_name}". Kept domain="${payload.keepDomain}", pool="${payload.keepPool}".`
+      + (carriedOverPhone ? ` Carried over ${sourceTeam.team_name}'s phone number (destination had none).` : destContact?.phone_number ? ` Kept ${destTeam.team_name}'s existing phone number.` : ''),
   });
 
   revalidatePath('/portal/organiser');
