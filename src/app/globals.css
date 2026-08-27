@@ -60,7 +60,14 @@ body {
 .orb {
   position: absolute;
   border-radius: 9999px;
-  filter: blur(90px);
+  /* PERFORMANCE: blur(90px) is one of the more expensive CSS filter
+     operations to composite, and these three orbs render + continuously
+     animate on EVERY page (this is in the root layout), including the
+     dense/functional portal screens people actively use under time
+     pressure during the live event. Reduced from 90px -- still reads as a
+     soft ambient glow at the sizes these render at, meaningfully cheaper
+     to composite on mobile GPUs. */
+  filter: blur(60px);
   will-change: transform;
 }
 
@@ -95,19 +102,22 @@ body {
 }
 
 /* Dense functional screens (Organiser console, score-entry forms) dial the
-   atmosphere down: fewer/smaller/more static, so it doesn't distract during
-   active work. */
+   atmosphere down: fewer/smaller/static, so it doesn't distract during
+   active work, and stops paying ongoing animation-compositing cost on the
+   screens people actually use under time pressure during the live event
+   -- a static blurred glow reads almost identically to a slow drift at
+   these sizes/opacities. */
 [data-density='dense'] .orb-1 {
   width: 30vw;
   height: 30vw;
   opacity: 0.16;
-  animation-duration: 60s;
+  animation: none;
 }
 [data-density='dense'] .orb-2 {
   width: 26vw;
   height: 26vw;
   opacity: 0.14;
-  animation-duration: 70s;
+  animation: none;
 }
 [data-density='dense'] .orb-3 {
   display: none;
