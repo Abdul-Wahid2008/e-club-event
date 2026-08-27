@@ -7,13 +7,14 @@ import QuestionQueuePanel from '@/src/components/QuestionQueuePanel';
 import LiveLeaderboard from '@/src/components/LiveLeaderboard';
 import PodiumReveal from '@/src/components/PodiumReveal';
 import ScoredPitchesList from '@/src/components/ScoredPitchesList';
+import ManageTeamsPanel from '@/src/components/ManageTeamsPanel';
 import ConnectionStatus, { ConnState } from '@/src/components/ConnectionStatus';
-import { Award, HelpCircle, ListChecks, Trophy } from 'lucide-react';
+import { Award, HelpCircle, ListChecks, Trophy, UsersRound } from 'lucide-react';
 import { createClient } from '@/src/lib/supabase/client';
-import { EventState, Pitch, Team, Question, PitchLeaderboardEntry } from '@/src/lib/types';
+import { EventState, Pitch, Team, Question, PitchLeaderboardEntry, RosterAuditLog, Domain } from '@/src/lib/types';
 
 export default function JudgePortalPage() {
-  const [activeTab, setActiveTab] = useState<'live' | 'questions' | 'scored' | 'leaderboard'>('live');
+  const [activeTab, setActiveTab] = useState<'live' | 'questions' | 'scored' | 'leaderboard' | 'manageTeams'>('live');
 
   const [eventState, setEventState] = useState<EventState | null>(null);
   const [pitches, setPitches] = useState<(Pitch & { teams?: Team })[]>([]);
@@ -21,6 +22,10 @@ export default function JudgePortalPage() {
   const [pendingQuestions, setPendingQuestions] = useState<Question[]>([]);
   const [leaderboard, setLeaderboard] = useState<PitchLeaderboardEntry[]>([]);
   const [podiumLeaderboard, setPodiumLeaderboard] = useState<PitchLeaderboardEntry[]>([]);
+  const [teams, setTeams] = useState<Team[]>([]);
+  const [teamMembers, setTeamMembers] = useState<any[]>([]);
+  const [rosterAuditLogs, setRosterAuditLogs] = useState<RosterAuditLog[]>([]);
+  const [domains, setDomains] = useState<Domain[]>([]);
   const [loadingData, setLoadingData] = useState(true);
   const [connState, setConnState] = useState<ConnState>('connecting');
 
@@ -64,6 +69,21 @@ export default function JudgePortalPage() {
     // otherwise falls back to the same prelim data as above.
     setPodiumLeaderboard(finalLb && finalLb.length > 0 ? (finalLb as PitchLeaderboardEntry[]) : ((lbData as PitchLeaderboardEntry[]) || []));
 
+    const { data: tData } = await supabase.from('teams').select('*').order('created_at', { ascending: false });
+    setTeams((tData as Team[]) || []);
+
+    const { data: tmData } = await supabase.from('team_members').select('*');
+    setTeamMembers(tmData || []);
+
+    const { data: rosterAuditData } = await supabase
+      .from('roster_audit_log')
+      .select('*')
+      .order('timestamp', { ascending: false });
+    setRosterAuditLogs((rosterAuditData as RosterAuditLog[]) || []);
+
+    const { data: domainsData } = await supabase.from('domains').select('*').order('name', { ascending: true });
+    setDomains((domainsData as Domain[]) || []);
+
     setLoadingData(false);
   }, []);
 
@@ -77,6 +97,9 @@ export default function JudgePortalPage() {
       .on('postgres_changes', { event: '*', schema: 'public', table: 'pitches' }, () => fetchData())
       .on('postgres_changes', { event: '*', schema: 'public', table: 'pitch_scores' }, () => fetchData())
       .on('postgres_changes', { event: '*', schema: 'public', table: 'questions' }, () => fetchData())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'teams' }, () => fetchData())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'team_members' }, () => fetchData())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'roster_audit_log' }, () => fetchData())
       .subscribe((status: string) => {
         if (status === 'SUBSCRIBED') setConnState('connected');
         else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED') setConnState('reconnecting');
@@ -88,11 +111,18 @@ export default function JudgePortalPage() {
     };
   }, [fetchData]);
 
+  const lockedTeamIds = new Set(
+    pitches
+      .filter((p) => ['called', 'pitching', 'awaiting_score', 'scored'].includes(p.queue_status))
+      .map((p) => p.team_id)
+  );
+
   const tabs = [
     { key: 'live' as const, label: 'Live / Up Next', icon: Award, active: 'bg-brand-500 text-white shadow-brand-glow' },
     { key: 'questions' as const, label: 'Question Queue', icon: HelpCircle, active: 'bg-accent-live text-white shadow-live-glow' },
     { key: 'scored' as const, label: 'Scored', icon: ListChecks, active: 'bg-success-500 text-white' },
     { key: 'leaderboard' as const, label: 'Leaderboard', icon: Trophy, active: 'bg-accent-warm text-bg-base shadow-warm-glow' },
+    { key: 'manageTeams' as const, label: 'Manage Teams', icon: UsersRound, active: 'bg-brand-500 text-white shadow-brand-glow' },
   ];
 
   if (loadingData) {
@@ -157,6 +187,17 @@ export default function JudgePortalPage() {
             )}
             <LiveLeaderboard roundName="prelim" />
           </div>
+        )}
+
+        {activeTab === 'manageTeams' && (
+          <ManageTeamsPanel
+            teams={teams}
+            teamMembers={teamMembers}
+            lockedTeamIds={lockedTeamIds}
+            domains={domains}
+            rosterAuditLogs={rosterAuditLogs}
+            onDataChange={fetchData}
+          />
         )}
       </main>
     </div>

@@ -8,11 +8,12 @@ import LiveLeaderboard from '@/src/components/LiveLeaderboard';
 import PodiumReveal from '@/src/components/PodiumReveal';
 import ManualOverrideModal from '@/src/components/ManualOverrideModal';
 import DataManagementPanel from '@/src/components/DataManagementPanel';
+import ManageTeamsPanel from '@/src/components/ManageTeamsPanel';
 import ConnectionStatus, { ConnState } from '@/src/components/ConnectionStatus';
 import { triggerConfetti } from '@/src/components/ConfettiEffect';
-import { ShieldAlert, Flame, Users, HelpCircle, Trophy, Sparkles, FileSpreadsheet, PartyPopper, Database } from 'lucide-react';
+import { ShieldAlert, Flame, Users, HelpCircle, Trophy, Sparkles, FileSpreadsheet, PartyPopper, Database, UsersRound } from 'lucide-react';
 import { createClient } from '@/src/lib/supabase/client';
-import { EventState, Pitch, Team, Question, PitchLeaderboardEntry, ScoreAuditLog } from '@/src/lib/types';
+import { EventState, Pitch, Team, Question, PitchLeaderboardEntry, ScoreAuditLog, RosterAuditLog, Domain } from '@/src/lib/types';
 import {
   qualifyFinalFourAction,
   exportRegistrationsCsvAction,
@@ -22,7 +23,7 @@ import {
 } from '@/src/app/actions/organiserActions';
 
 export default function OrganiserPortalPage() {
-  const [activeTab, setActiveTab] = useState<'control' | 'registrations' | 'questions' | 'leaderboard' | 'audit' | 'data'>('control');
+  const [activeTab, setActiveTab] = useState<'control' | 'registrations' | 'questions' | 'leaderboard' | 'audit' | 'data' | 'manageTeams'>('control');
 
   const [eventState, setEventState] = useState<EventState | null>(null);
   const [pitches, setPitches] = useState<(Pitch & { teams?: Team })[]>([]);
@@ -30,6 +31,8 @@ export default function OrganiserPortalPage() {
   const [teamMembers, setTeamMembers] = useState<any[]>([]);
   const [pendingQuestions, setPendingQuestions] = useState<Question[]>([]);
   const [auditLogs, setAuditLogs] = useState<ScoreAuditLog[]>([]);
+  const [rosterAuditLogs, setRosterAuditLogs] = useState<RosterAuditLog[]>([]);
+  const [domains, setDomains] = useState<Domain[]>([]);
   const [approvedQuestions, setApprovedQuestions] = useState<Question[]>([]);
   const [leaderboard, setLeaderboard] = useState<PitchLeaderboardEntry[]>([]);
   const [loadingData, setLoadingData] = useState(true);
@@ -81,6 +84,15 @@ export default function OrganiserPortalPage() {
       .order('timestamp', { ascending: false });
     setAuditLogs((auditData as ScoreAuditLog[]) || []);
 
+    const { data: rosterAuditData } = await supabase
+      .from('roster_audit_log')
+      .select('*')
+      .order('timestamp', { ascending: false });
+    setRosterAuditLogs((rosterAuditData as RosterAuditLog[]) || []);
+
+    const { data: domainsData } = await supabase.from('domains').select('*').order('name', { ascending: true });
+    setDomains((domainsData as Domain[]) || []);
+
     // For the podium reveal banner: Final round's own scoring if one ran,
     // otherwise the prelim leaderboard. Both fetched in parallel rather
     // than sequentially-on-condition -- this endpoint is hit on every
@@ -107,6 +119,8 @@ export default function OrganiserPortalPage() {
       .on('postgres_changes', { event: '*', schema: 'public', table: 'questions' }, () => fetchOrganiserData())
       .on('postgres_changes', { event: '*', schema: 'public', table: 'teams' }, () => fetchOrganiserData())
       .on('postgres_changes', { event: '*', schema: 'public', table: 'score_audit_log' }, () => fetchOrganiserData())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'roster_audit_log' }, () => fetchOrganiserData())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'team_members' }, () => fetchOrganiserData())
       .subscribe((status: string) => {
         if (status === 'SUBSCRIBED') setConnState('connected');
         else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED') setConnState('reconnecting');
@@ -185,11 +199,18 @@ export default function OrganiserPortalPage() {
     downloadCsv(res.csv, `the_pitch_league_results_${Date.now()}.csv`);
   };
 
+  const lockedTeamIds = new Set(
+    pitches
+      .filter((p) => ['called', 'pitching', 'awaiting_score', 'scored'].includes(p.queue_status))
+      .map((p) => p.team_id)
+  );
+
   const tabs = [
     { key: 'control' as const, label: 'Live Control Room', icon: Flame, badge: null, active: 'bg-brand-500 text-white shadow-brand-glow' },
     { key: 'questions' as const, label: 'Question Queue', icon: HelpCircle, badge: pendingQuestions.length, active: 'bg-accent-live text-white shadow-live-glow' },
     { key: 'leaderboard' as const, label: 'Live Leaderboard & Overrides', icon: Trophy, badge: null, active: 'bg-accent-warm text-bg-base shadow-warm-glow' },
     { key: 'registrations' as const, label: `Team Registrations (${teams.length})`, icon: Users, badge: null, active: 'bg-brand-500 text-white shadow-brand-glow' },
+    { key: 'manageTeams' as const, label: 'Manage Teams', icon: UsersRound, badge: null, active: 'bg-brand-500 text-white shadow-brand-glow' },
     { key: 'audit' as const, label: `Score Audit Log (${auditLogs.length})`, icon: ShieldAlert, badge: null, active: 'bg-white/10 text-text-primary' },
     { key: 'data' as const, label: 'Data Management', icon: Database, badge: null, active: 'bg-danger-500 text-white' },
   ];
@@ -389,6 +410,20 @@ export default function OrganiserPortalPage() {
               </table>
             </div>
           </div>
+        )}
+
+        {/* TAB: MANAGE TEAMS (organiser + judge; roster mutations re-check
+            requireRole(['organiser','judge']) server-side regardless of this
+            tab being reachable in the UI, and are RLS-backed too). */}
+        {activeTab === 'manageTeams' && (
+          <ManageTeamsPanel
+            teams={teams}
+            teamMembers={teamMembers}
+            lockedTeamIds={lockedTeamIds}
+            domains={domains}
+            rosterAuditLogs={rosterAuditLogs}
+            onDataChange={fetchOrganiserData}
+          />
         )}
 
         {/* TAB 6: DATA MANAGEMENT (organiser-only; deleteTeamsAction /
