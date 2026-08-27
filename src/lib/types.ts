@@ -24,6 +24,16 @@ export interface Team {
   created_at: string;
 }
 
+// Lives in a separate RLS-restricted table (team_contact_info), NOT on
+// Team itself -- `teams` is publicly readable (domain/pool must be visible
+// everywhere), so the leader's phone number is kept out of that row
+// entirely rather than relying on column-level hiding, which RLS can't do.
+export interface TeamContactInfo {
+  team_id: string;
+  phone_number: string;
+  created_at?: string;
+}
+
 export interface TeamMember {
   id: string;
   team_id: string;

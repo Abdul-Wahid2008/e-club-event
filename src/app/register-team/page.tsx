@@ -8,7 +8,7 @@ import HoneypotField from '@/src/components/HoneypotField';
 import TurnstileWidget from '@/src/components/TurnstileWidget';
 import { Users, User, Plus, Trash2, Sparkles, ArrowRight, Copy, Check, MessageCircle } from 'lucide-react';
 import { registerTeamAction } from '@/src/app/actions/authActions';
-import { isValidEmailFormat } from '@/src/lib/validation';
+import { isValidEmailFormat, normalizeIndianPhoneNumber } from '@/src/lib/validation';
 import { useRouter } from 'next/navigation';
 import { createClient } from '@/src/lib/supabase/client';
 
@@ -21,6 +21,7 @@ export default function RegisterTeamPage() {
   const [teamName, setTeamName] = useState('');
   const [leaderName, setLeaderName] = useState('');
   const [leaderEmail, setLeaderEmail] = useState('');
+  const [leaderPhone, setLeaderPhone] = useState('');
   const [honeypot, setHoneypot] = useState('');
   const [turnstileToken, setTurnstileToken] = useState<string | null>(null);
 
@@ -93,11 +94,17 @@ export default function RegisterTeamPage() {
       return;
     }
 
+    if (!normalizeIndianPhoneNumber(leaderPhone)) {
+      setMessage({ type: 'error', text: 'Please provide a valid 10-digit Indian mobile number.' });
+      return;
+    }
+
     setLoading(true);
     const res = await registerTeamAction({
       teamName,
       leaderName,
       leaderEmail,
+      leaderPhone,
       members: activeMembers,
       honeypot,
       turnstileToken: turnstileToken || undefined,
@@ -295,6 +302,20 @@ export default function RegisterTeamPage() {
                       value={leaderEmail}
                       className="w-full bg-white/[0.02] border border-panel-border rounded-lg px-3 py-2 text-xs text-text-secondary cursor-not-allowed font-mono"
                     />
+                  </div>
+                  <div className="sm:col-span-2">
+                    <label className="block text-[11px] text-text-secondary mb-1">Your Phone Number *</label>
+                    <input
+                      type="tel"
+                      required
+                      placeholder="e.g. 9876543210 or +91 98765 43210"
+                      value={leaderPhone}
+                      onChange={(e) => setLeaderPhone(e.target.value)}
+                      className="w-full bg-white/5 border border-panel-border rounded-lg px-3 py-2 text-xs text-text-primary focus:outline-none focus:border-brand-500 font-mono"
+                    />
+                    <p className="text-[10px] text-text-secondary mt-1">
+                      Visible only to Organisers & Judges, for day-of coordination. Not shown to other teams.
+                    </p>
                   </div>
                 </div>
               </div>

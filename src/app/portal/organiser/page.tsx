@@ -13,7 +13,7 @@ import ConnectionStatus, { ConnState } from '@/src/components/ConnectionStatus';
 import { triggerConfetti } from '@/src/components/ConfettiEffect';
 import { ShieldAlert, Flame, Users, HelpCircle, Trophy, Sparkles, FileSpreadsheet, PartyPopper, Database, UsersRound } from 'lucide-react';
 import { createClient } from '@/src/lib/supabase/client';
-import { EventState, Pitch, Team, Question, PitchLeaderboardEntry, ScoreAuditLog, RosterAuditLog, Domain } from '@/src/lib/types';
+import { EventState, Pitch, Team, Question, PitchLeaderboardEntry, ScoreAuditLog, RosterAuditLog, Domain, TeamContactInfo } from '@/src/lib/types';
 import {
   qualifyFinalFourAction,
   exportRegistrationsCsvAction,
@@ -33,6 +33,7 @@ export default function OrganiserPortalPage() {
   const [auditLogs, setAuditLogs] = useState<ScoreAuditLog[]>([]);
   const [rosterAuditLogs, setRosterAuditLogs] = useState<RosterAuditLog[]>([]);
   const [domains, setDomains] = useState<Domain[]>([]);
+  const [contactInfo, setContactInfo] = useState<TeamContactInfo[]>([]);
   const [approvedQuestions, setApprovedQuestions] = useState<Question[]>([]);
   const [leaderboard, setLeaderboard] = useState<PitchLeaderboardEntry[]>([]);
   const [loadingData, setLoadingData] = useState(true);
@@ -93,6 +94,9 @@ export default function OrganiserPortalPage() {
     const { data: domainsData } = await supabase.from('domains').select('*').order('name', { ascending: true });
     setDomains((domainsData as Domain[]) || []);
 
+    const { data: contactData } = await supabase.from('team_contact_info').select('*');
+    setContactInfo((contactData as TeamContactInfo[]) || []);
+
     // For the podium reveal banner: Final round's own scoring if one ran,
     // otherwise the prelim leaderboard. Both fetched in parallel rather
     // than sequentially-on-condition -- this endpoint is hit on every
@@ -121,6 +125,7 @@ export default function OrganiserPortalPage() {
       .on('postgres_changes', { event: '*', schema: 'public', table: 'score_audit_log' }, () => fetchOrganiserData())
       .on('postgres_changes', { event: '*', schema: 'public', table: 'roster_audit_log' }, () => fetchOrganiserData())
       .on('postgres_changes', { event: '*', schema: 'public', table: 'team_members' }, () => fetchOrganiserData())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'team_contact_info' }, () => fetchOrganiserData())
       .subscribe((status: string) => {
         if (status === 'SUBSCRIBED') setConnState('connected');
         else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED') setConnState('reconnecting');
@@ -422,6 +427,7 @@ export default function OrganiserPortalPage() {
             lockedTeamIds={lockedTeamIds}
             domains={domains}
             rosterAuditLogs={rosterAuditLogs}
+            contactInfo={contactInfo}
             onDataChange={fetchOrganiserData}
           />
         )}

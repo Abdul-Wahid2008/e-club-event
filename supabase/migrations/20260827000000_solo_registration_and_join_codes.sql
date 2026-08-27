@@ -1,4 +1,4 @@
--- Migration: Solo registration + team join codes
+-- Migration: Solo registration + team join codes + leader phone number
 --
 -- 1. Relaxes the DB-level team size floor from 2 to 1 member so a solo
 --    registrant is a valid team (enforced today only in application code
@@ -11,6 +11,17 @@
 --    teammates can join a team after the leader registers, instead of
 --    the leader having to know every member's email up front. Generated
 --    server-side (see next_join_code() below) at team-creation time.
+--
+-- 3. Adds a SEPARATE team_contact_info table (NOT a column on `teams`)
+--    holding the leader/registrant's phone number. `teams` has an
+--    unconditional public-read RLS policy ("Public read teams", USING
+--    true) because domain/pool must be visible on every public
+--    portal/screen -- RLS is row-level, not column-level, so a
+--    phone_number column added directly to `teams` would be exposed to
+--    anyone with the anon key alongside the public fields. This mirrors
+--    the existing team_members pattern (see 20260813000000_rls_hardening,
+--    which pulled member emails into an RLS-restricted table for the same
+--    reason) -- one row per team, organiser/judge-only, never public.
 
 ALTER TABLE public.teams
 ADD COLUMN IF NOT EXISTS join_code text;
@@ -18,6 +29,43 @@ ADD COLUMN IF NOT EXISTS join_code text;
 CREATE UNIQUE INDEX IF NOT EXISTS teams_join_code_unique
 ON public.teams (join_code)
 WHERE join_code IS NOT NULL;
+
+CREATE TABLE IF NOT EXISTS public.team_contact_info (
+  team_id UUID PRIMARY KEY REFERENCES public.teams(id) ON DELETE CASCADE,
+  phone_number TEXT NOT NULL,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+ALTER TABLE public.team_contact_info ENABLE ROW LEVEL SECURITY;
+
+-- Same visibility scope as team_members' email restriction: the team's own
+-- registrant (auth_user_id match) plus organiser/judge. Never public, never
+-- readable by other teams.
+CREATE POLICY "Team reads own contact info, staff reads all" ON public.team_contact_info FOR SELECT USING (
+  EXISTS (
+    SELECT 1 FROM public.teams t
+    WHERE t.id = team_id AND t.auth_user_id = auth.uid()
+  ) OR EXISTS (
+    SELECT 1 FROM public.profiles WHERE id = auth.uid() AND role IN ('organiser', 'judge')
+  )
+);
+
+CREATE POLICY "Team insert own contact info" ON public.team_contact_info FOR INSERT WITH CHECK (
+  EXISTS (
+    SELECT 1 FROM public.teams t
+    WHERE t.id = team_id AND t.auth_user_id = auth.uid()
+  ) OR EXISTS (
+    SELECT 1 FROM public.profiles WHERE id = auth.uid() AND role IN ('organiser', 'judge')
+  )
+);
+
+-- Organiser/judge may also correct a mistyped number later from Manage
+-- Teams (same staff-edit spirit as the roster tools added alongside this
+-- migration) -- the team's own registrant is intentionally NOT granted
+-- UPDATE here (no self-serve edit surface exists for this in the app yet).
+CREATE POLICY "Staff update contact info" ON public.team_contact_info FOR UPDATE USING (
+  EXISTS (SELECT 1 FROM public.profiles WHERE id = auth.uid() AND role IN ('organiser', 'judge'))
+);
 
 -- Generates a 6-character uppercase alphanumeric code, excluding visually
 -- ambiguous characters (0/O, 1/I/L), and retries on collision. Called once

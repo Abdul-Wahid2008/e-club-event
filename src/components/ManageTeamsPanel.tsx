@@ -1,10 +1,10 @@
 'use client';
 
 import { useState, useMemo } from 'react';
-import { Users, UserPlus, GitMerge, Lock, ArrowRightLeft, Plus } from 'lucide-react';
+import { Users, UserPlus, GitMerge, Lock, ArrowRightLeft, Plus, Phone } from 'lucide-react';
 import Toast, { ToastMessage } from '@/src/components/Toast';
 import PoolBadge from '@/src/components/PoolBadge';
-import { Team, TeamMember, RosterAuditLog } from '@/src/lib/types';
+import { Team, TeamMember, RosterAuditLog, TeamContactInfo } from '@/src/lib/types';
 import { moveTeamMemberAction, mergeTeamsAction, createEmptyTeamAction } from '@/src/app/actions/rosterActions';
 
 interface ManageTeamsPanelProps {
@@ -13,10 +13,11 @@ interface ManageTeamsPanelProps {
   lockedTeamIds: Set<string>;
   domains: { id: string; name: string }[];
   rosterAuditLogs: RosterAuditLog[];
+  contactInfo: TeamContactInfo[];
   onDataChange: () => void;
 }
 
-export default function ManageTeamsPanel({ teams, teamMembers, lockedTeamIds, domains, rosterAuditLogs, onDataChange }: ManageTeamsPanelProps) {
+export default function ManageTeamsPanel({ teams, teamMembers, lockedTeamIds, domains, rosterAuditLogs, contactInfo, onDataChange }: ManageTeamsPanelProps) {
   const [message, setMessage] = useState<ToastMessage | null>(null);
   const [loading, setLoading] = useState(false);
 
@@ -41,6 +42,12 @@ export default function ManageTeamsPanel({ teams, teamMembers, lockedTeamIds, do
     }
     return map;
   }, [teamMembers]);
+
+  const phoneByTeam = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const c of contactInfo) map.set(c.team_id, c.phone_number);
+    return map;
+  }, [contactInfo]);
 
   const sourceTeam = teams.find((t) => t.id === mergeSourceId);
   const destTeam = teams.find((t) => t.id === mergeDestId);
@@ -196,6 +203,7 @@ export default function ManageTeamsPanel({ teams, teamMembers, lockedTeamIds, do
                 <th className="py-3 px-4">Domain</th>
                 <th className="py-3 px-4">Pool</th>
                 <th className="py-3 px-4">Members</th>
+                <th className="py-3 px-4">Contact</th>
                 <th className="py-3 px-4">Registered</th>
                 <th className="py-3 px-4">Status</th>
               </tr>
@@ -204,6 +212,7 @@ export default function ManageTeamsPanel({ teams, teamMembers, lockedTeamIds, do
               {teams.map((t) => {
                 const members = membersByTeam.get(t.id) || [];
                 const locked = lockedTeamIds.has(t.id);
+                const phone = phoneByTeam.get(t.id);
                 return (
                   <tr key={t.id} className="hover:bg-white/[0.03] transition-colors align-top">
                     <td className="py-3 px-4 font-bold text-text-primary">
@@ -219,9 +228,22 @@ export default function ManageTeamsPanel({ teams, teamMembers, lockedTeamIds, do
                       ) : (
                         <ul className="space-y-0.5">
                           {members.map((m) => (
-                            <li key={m.id}>{m.name} {m.is_leader && <span className="text-brand-500">(Leader)</span>}</li>
+                            <li key={m.id}>
+                              {m.name} {m.is_leader && <span className="text-brand-500">(Leader)</span>}
+                              <div className="text-[10px] text-text-secondary/70 font-mono">{m.email}</div>
+                            </li>
                           ))}
                         </ul>
+                      )}
+                    </td>
+                    <td className="py-3 px-4 text-text-secondary font-mono">
+                      {phone ? (
+                        <span className="inline-flex items-center gap-1.5">
+                          <Phone className="w-3 h-3 text-brand-500 shrink-0" />
+                          {phone}
+                        </span>
+                      ) : (
+                        <span className="italic text-text-secondary/50">—</span>
                       )}
                     </td>
                     <td className="py-3 px-4 text-text-secondary font-mono text-[10px]">{new Date(t.created_at).toLocaleString()}</td>
@@ -240,7 +262,7 @@ export default function ManageTeamsPanel({ teams, teamMembers, lockedTeamIds, do
               })}
               {teams.length === 0 && (
                 <tr>
-                  <td colSpan={6} className="py-8 text-center text-text-secondary/70 italic">No teams registered yet.</td>
+                  <td colSpan={7} className="py-8 text-center text-text-secondary/70 italic">No teams registered yet.</td>
                 </tr>
               )}
             </tbody>

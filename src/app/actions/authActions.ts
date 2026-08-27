@@ -2,7 +2,7 @@
 
 import { createClient } from '@/src/lib/supabase/server';
 import { createAdminClient } from '@/src/lib/supabase/admin';
-import { isValidStaffEmail, isValidEmailFormat, validateTeamMemberEmails } from '@/src/lib/validation';
+import { isValidStaffEmail, isValidEmailFormat, validateTeamMemberEmails, normalizeIndianPhoneNumber } from '@/src/lib/validation';
 import { isDisposableEmail } from '@/src/lib/disposableEmail.server';
 import { verifyTurnstileToken, isHoneypotTripped, friendlyErrorMessage } from '@/src/lib/antiAbuse';
 import { redirect } from 'next/navigation';
@@ -159,11 +159,12 @@ export async function registerTeamAction(payload: {
   teamName: string;
   leaderName: string;
   leaderEmail: string;
+  leaderPhone: string;
   members: { name: string; email: string }[];
   honeypot?: string;
   turnstileToken?: string;
 }) {
-  const { teamName, leaderName, leaderEmail, members, honeypot, turnstileToken } = payload;
+  const { teamName, leaderName, leaderEmail, leaderPhone, members, honeypot, turnstileToken } = payload;
 
   // Honeypot: reject silently -- return the same shape a real submission
   // would produce on the FIRST failure path a bot is likely to hit (a
@@ -191,6 +192,14 @@ export async function registerTeamAction(payload: {
     return {
       error: `All team member emails must be valid. Invalid emails found: ${validation.invalidEmails.join(', ')}`,
     };
+  }
+
+  // 3b. Leader/registrant phone number: required, normalized to bare 10
+  // digits (strips +91/spaces/dashes) before storage -- see
+  // normalizeIndianPhoneNumber's own doc comment for the exact rule.
+  const normalizedPhone = normalizeIndianPhoneNumber(leaderPhone);
+  if (!normalizedPhone) {
+    return { error: 'Please provide a valid 10-digit Indian mobile number.' };
   }
 
   const disposable = allEmails.filter((e) => isDisposableEmail(e));
@@ -323,6 +332,20 @@ export async function registerTeamAction(payload: {
       return { error: 'One of these emails is already registered as a member of another team. Each person may only be a member of one team.' };
     }
     return { error: 'Failed to register team members.' };
+  }
+
+  // 8. Store the leader/registrant's phone number in the RLS-restricted
+  // team_contact_info table (never on the publicly-readable `teams` row --
+  // see that migration's doc comment for why). Best-effort: the team is
+  // already fully registered at this point, so a failure here shouldn't
+  // block/rollback the whole registration -- it's logged for the organiser
+  // to notice a missing contact number rather than surfaced as a hard error
+  // to a registrant who has otherwise successfully signed up.
+  const { error: contactErr } = await adminSupabase
+    .from('team_contact_info')
+    .insert({ team_id: team.id, phone_number: normalizedPhone });
+  if (contactErr) {
+    console.error('Failed to store team contact phone number:', contactErr.message);
   }
 
   // Pitch record creation for the prelim round is handled by the

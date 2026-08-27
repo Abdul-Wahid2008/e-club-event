@@ -40,6 +40,23 @@ export function validateTeamMemberEmails(emails: string[]): { valid: boolean; in
 }
 
 /**
+ * Normalizes an Indian mobile number to bare 10 digits for storage: strips
+ * spaces/dashes/parens and an optional leading +91/91/0, then requires
+ * exactly 10 digits starting with 6-9 (the valid Indian mobile number
+ * range). Returns null if the input doesn't match after normalization --
+ * callers should treat null as invalid, never store the raw input.
+ */
+export function normalizeIndianPhoneNumber(input: string): string | null {
+  if (!input || typeof input !== 'string') return null;
+
+  let digits = input.replace(/[\s\-()]/g, '');
+  digits = digits.replace(/^\+?91/, '').replace(/^0/, '');
+
+  if (!/^[6-9]\d{9}$/.test(digits)) return null;
+  return digits;
+}
+
+/**
  * Sanitizes user input string against HTML XSS, Null bytes, and SQL injection patterns.
  */
 export function sanitizeInput(input: string): string {

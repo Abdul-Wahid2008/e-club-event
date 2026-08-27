@@ -11,7 +11,7 @@ import ManageTeamsPanel from '@/src/components/ManageTeamsPanel';
 import ConnectionStatus, { ConnState } from '@/src/components/ConnectionStatus';
 import { Award, HelpCircle, ListChecks, Trophy, UsersRound } from 'lucide-react';
 import { createClient } from '@/src/lib/supabase/client';
-import { EventState, Pitch, Team, Question, PitchLeaderboardEntry, RosterAuditLog, Domain } from '@/src/lib/types';
+import { EventState, Pitch, Team, Question, PitchLeaderboardEntry, RosterAuditLog, Domain, TeamContactInfo } from '@/src/lib/types';
 
 export default function JudgePortalPage() {
   const [activeTab, setActiveTab] = useState<'live' | 'questions' | 'scored' | 'leaderboard' | 'manageTeams'>('live');
@@ -26,6 +26,7 @@ export default function JudgePortalPage() {
   const [teamMembers, setTeamMembers] = useState<any[]>([]);
   const [rosterAuditLogs, setRosterAuditLogs] = useState<RosterAuditLog[]>([]);
   const [domains, setDomains] = useState<Domain[]>([]);
+  const [contactInfo, setContactInfo] = useState<TeamContactInfo[]>([]);
   const [loadingData, setLoadingData] = useState(true);
   const [connState, setConnState] = useState<ConnState>('connecting');
 
@@ -84,6 +85,9 @@ export default function JudgePortalPage() {
     const { data: domainsData } = await supabase.from('domains').select('*').order('name', { ascending: true });
     setDomains((domainsData as Domain[]) || []);
 
+    const { data: contactData } = await supabase.from('team_contact_info').select('*');
+    setContactInfo((contactData as TeamContactInfo[]) || []);
+
     setLoadingData(false);
   }, []);
 
@@ -100,6 +104,7 @@ export default function JudgePortalPage() {
       .on('postgres_changes', { event: '*', schema: 'public', table: 'teams' }, () => fetchData())
       .on('postgres_changes', { event: '*', schema: 'public', table: 'team_members' }, () => fetchData())
       .on('postgres_changes', { event: '*', schema: 'public', table: 'roster_audit_log' }, () => fetchData())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'team_contact_info' }, () => fetchData())
       .subscribe((status: string) => {
         if (status === 'SUBSCRIBED') setConnState('connected');
         else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT' || status === 'CLOSED') setConnState('reconnecting');
@@ -196,6 +201,7 @@ export default function JudgePortalPage() {
             lockedTeamIds={lockedTeamIds}
             domains={domains}
             rosterAuditLogs={rosterAuditLogs}
+            contactInfo={contactInfo}
             onDataChange={fetchData}
           />
         )}
